@@ -53,7 +53,7 @@ const loginService = {
 			throw new BizError(t('emailLengthLimit'));
 		}
 
-		if (password.length > 30) {
+		if (password.length > 128) {
 			throw new BizError(t('pwdLengthLimit'));
 		}
 
@@ -243,8 +243,13 @@ const loginService = {
 			throw new BizError(t('isBanUser'));
 		}
 
-		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password) && !noVerifyPwd) {
+		const { valid, needsRehash } = await cryptoUtils.verifyPasswordWithStatus(password, userRow.salt, userRow.password);
+		if ((!valid && !noVerifyPwd)) {
 			throw new BizError(t('IncorrectPwd'));
+		}
+
+		if (valid && needsRehash && !noVerifyPwd) {
+			await userService.resetPassword(c, { password }, userRow.userId);
 		}
 
 		const uuid = uuidv4();
