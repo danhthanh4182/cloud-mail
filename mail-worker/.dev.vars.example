@@ -1,0 +1,2 @@
+jwt_secret = "dev-only-change-me"
+#resend_webhook_secret = "whsec_..."
