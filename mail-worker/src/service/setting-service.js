@@ -10,6 +10,12 @@ import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 import domainUtils from '../utils/domain-uitls';
+export function normalizeBlacklist(value) {
+	if (!value) {
+		return '';
+	}
+	return String(value).split(',').map((s) => s.trim()).filter(Boolean).join(',');
+}
 
 const settingService = {
 
@@ -184,7 +190,11 @@ const settingService = {
 
 	async setBlacklist(c, params) {
 		const { blackSubject, blackContent, blackFrom  } = params
-		await orm(c).update(setting).set({ blackSubject, blackContent, blackFrom }).run();
+		await orm(c).update(setting).set({
+			blackSubject: normalizeBlacklist(blackSubject),
+			blackContent: normalizeBlacklist(blackContent),
+			blackFrom: normalizeBlacklist(blackFrom)
+		}).run();
 		await this.refresh(c);
 		return this.get(c);
 	},

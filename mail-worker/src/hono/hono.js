@@ -6,11 +6,10 @@ import { cors } from 'hono/cors';
 
 app.use('*', cors());
 
-app.onError((err, c) => {
+export function onErrorHandler(err, c) {
 	if (err.name === 'BizError') {
 		console.log(err.message);
-	} else {
-		console.error(err);
+		return c.json(result.fail(err.message, err.code));
 	}
 
 	if (err.message === `Cannot read properties of undefined (reading 'get')`) {
@@ -29,9 +28,11 @@ app.onError((err, c) => {
 		return c.json(result.fail('请按照文档更新数据库<br/>Please update the database as documented',502));
 	}
 
-	return c.json(result.fail(err.message, err.code));
-});
+	const requestId = crypto.randomUUID().slice(0, 8);
+	console.error(`[${requestId}]`, err);
+	return c.json(result.fail(`Internal error (${requestId})`));
+}
+
+app.onError(onErrorHandler);
 
 export default app;
-
-
