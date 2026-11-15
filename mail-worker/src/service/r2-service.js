@@ -1,6 +1,7 @@
 import s3Service from './s3-service';
 import settingService from './setting-service';
 import kvObjService from './kv-obj-service';
+import { hardenObjectResponse } from '../utils/object-response';
 
 const r2Service = {
 
@@ -64,27 +65,27 @@ const r2Service = {
 		try {
 			const storageType = await this.storageType(c);
 
-			if (storageType === 'KV') {
-				return await kvObjService.getObj(c, key);
-			}
+		if (storageType === 'KV') {
+			return hardenObjectResponse(await kvObjService.getObj(c, key), key);
+		}
 
-			if (storageType === 'R2') {
-				const obj = await c.env.r2.get(key);
-				if (!obj) {
-					return null;
+		if (storageType === 'R2') {
+			const obj = await c.env.r2.get(key);
+			if (!obj) {
+				return null;
+			}
+			return hardenObjectResponse(new Response(obj.body, {
+				headers: {
+					'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+					'Content-Disposition': obj.httpMetadata?.contentDisposition || null,
+					'Cache-Control': obj.httpMetadata?.cacheControl || null
 				}
-				return new Response(obj.body, {
-					headers: {
-						'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
-						'Content-Disposition': obj.httpMetadata?.contentDisposition || null,
-						'Cache-Control': obj.httpMetadata?.cacheControl || null
-					}
-				});
-			}
+			}), key);
+		}
 
-			if (storageType === 'S3') {
-				return await s3Service.getObj(c, key);
-			}
+		if (storageType === 'S3') {
+			return hardenObjectResponse(await s3Service.getObj(c, key), key);
+		}
 
 			return null;
 		} catch (e) {
