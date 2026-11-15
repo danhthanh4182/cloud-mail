@@ -12,6 +12,7 @@ import accountService from './account-service';
 import settingService from './setting-service';
 import saltHashUtils from '../utils/crypto-utils';
 import cryptoUtils from '../utils/crypto-utils';
+import reqUtils from '../utils/req-utils';
 import turnstileService from './turnstile-service';
 import roleService from './role-service';
 import regKeyService from './reg-key-service';
@@ -19,6 +20,8 @@ import dayjs from 'dayjs';
 import { toUtc } from '../utils/date-uitil';
 import { t } from '../i18n/i18n.js';
 import verifyRecordService from './verify-record-service';
+const MAX_LOGIN_FAILURES = 10;
+const LOGIN_FAIL_TTL_SECONDS = 900;
 
 const loginService = {
 
@@ -229,10 +232,33 @@ const loginService = {
 			throw new BizError(t('emailAndPwdEmpty'));
 		}
 
+		const failKey = noVerifyPwd ? null : 'login-fail:' + await cryptoUtils.sha256Hex(email.toLowerCase() + ':' + reqUtils.getIp(c));
+
+		let failCount = 0;
+		if (failKey) {
+			failCount = Number(await c.env.kv.get(failKey));
+			if (!Number.isFinite(failCount)) {
+				failCount = 0;
+			}
+			if (failCount >= MAX_LOGIN_FAILURES) {
+				throw new BizError(t('tooManyLoginAttempts'), 429);
+			}
+		}
+
+		const recordLoginFailure = async () => {
+			if (failKey) {
+				await c.env.kv.put(failKey, String(failCount + 1), { expirationTtl: LOGIN_FAIL_TTL_SECONDS });
+			}
+		};
+
 		const userRow = await userService.selectByEmailIncludeDel(c, email);
 
 		if (!userRow) {
-			throw new BizError(t('notExistUser'));
+			if (!noVerifyPwd) {
+				await cryptoUtils.hashPassword(password);
+				await recordLoginFailure();
+			}
+			throw new BizError(t('IncorrectPwd'));
 		}
 
 		if(userRow.isDel === isDel.DELETE) {
@@ -244,12 +270,17 @@ const loginService = {
 		}
 
 		const { valid, needsRehash } = await cryptoUtils.verifyPasswordWithStatus(password, userRow.salt, userRow.password);
-		if ((!valid && !noVerifyPwd)) {
+		if (!valid && !noVerifyPwd) {
+			await recordLoginFailure();
 			throw new BizError(t('IncorrectPwd'));
 		}
 
 		if (valid && needsRehash && !noVerifyPwd) {
 			await userService.resetPassword(c, { password }, userRow.userId);
+		}
+
+		if (failKey) {
+			await c.env.kv.delete(failKey);
 		}
 
 		const uuid = uuidv4();

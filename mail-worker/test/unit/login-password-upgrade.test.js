@@ -30,6 +30,9 @@ function mockContext(kv) {
 				},
 			},
 		},
+		req: {
+			header: () => null,
+		},
 	};
 }
 

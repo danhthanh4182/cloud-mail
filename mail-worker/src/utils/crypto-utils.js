@@ -44,6 +44,12 @@ const saltHashUtils = {
 		return btoa(String.fromCharCode(...hashArray));
 	},
 
+	async sha256Hex(text) {
+		const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text));
+		return Array.from(new Uint8Array(digest))
+			.map((b) => b.toString(16).padStart(2, '0'))
+			.join('');
+	},
 	async verifyPasswordWithStatus(inputPassword, salt, storedHash) {
 		if (!storedHash || !storedHash.startsWith(`${PBKDF2_PREFIX}$`)) {
 			const legacy = await this.legacyHashPassword(inputPassword, salt);
