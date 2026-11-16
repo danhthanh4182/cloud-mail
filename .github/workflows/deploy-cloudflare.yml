@@ -14,7 +14,7 @@ permissions:
 jobs:
   Deploy-cloud-mail:
     name: 🏗️ Build and Deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     env:
       NAME: ${{ secrets.NAME || vars.NAME || 'cloud-mail' }}
@@ -36,15 +36,15 @@ jobs:
 
     steps:
       - name: 🚚 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: ⚙ Set up pnpm
-        uses: pnpm/action-setup@v4.1.0
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
       - name: ⚙ Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: "pnpm"
@@ -236,11 +236,7 @@ jobs:
           fi
           
           WORKER_URL=$(grep -o "https://.*\.workers\.dev" deploy.log || echo "")
-          
-          if [ -n "$WORKER_URL" ]; then
-            echo "::add-mask::$WORKER_URL"
-          fi
-          
+
           echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
           echo "✅ Setup completed."
 
@@ -271,8 +267,17 @@ jobs:
           fi
 
       - name: 🗑️ Delete workflow runs
-        uses: GitRML/delete-workflow-runs@6c7cf4852e73c46502ee79494d99f5b504cacc6d # v1.2.2
         continue-on-error: true
-        with:
-          retain_days: '1'
-          keep_minimum_runs: '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CUTOFF=$(date -u -d '1 day ago' +%s)
+          gh run list --workflow deploy-cloudflare.yml --limit 100 \
+            --json databaseId,number,createdAt \
+            --jq ".[] | select(.number != ${{ github.run_number }}) | \"\(.databaseId) \(.createdAt)\"" \
+          | while read -r ID CREATED; do
+              TS=$(date -u -d "$CREATED" +%s)
+              if [ "$TS" -lt "$CUTOFF" ]; then
+                gh run delete "$ID" --yes || true
+              fi
+            done
