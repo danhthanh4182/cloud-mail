@@ -271,7 +271,7 @@ jobs:
           fi
 
       - name: 🗑️ Delete workflow runs
-        uses: GitRML/delete-workflow-runs@6c7cf4852e73c46502ee79414d99f5b504cacc6d
+        uses: GitRML/delete-workflow-runs@6c7cf4852e73c46502ee79494d99f5b504cacc6d # v1.2.2
         continue-on-error: true
         with:
           retain_days: '1'
