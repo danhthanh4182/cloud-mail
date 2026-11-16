@@ -22,7 +22,7 @@ const telegramService = {
 
 		const result = await jwtUtils.verifyToken(c, token);
 
-		if (!result) {
+		if (!result || result.aud !== 'tg-view') {
 			return emailTextTemplate('Access denied')
 		}
 
@@ -49,7 +49,7 @@ const telegramService = {
 
 		const tgChatIds = tgChatId.split(',');
 
-		const jwtToken = await jwtUtils.generateToken(c, { emailId: email.emailId })
+		const jwtToken = await jwtUtils.generateToken(c, { emailId: email.emailId, aud: 'tg-view' }, 7 * 24 * 3600)
 
 		const webAppUrl = customDomain ? `${domainUtils.toOssDomain(customDomain)}/api/telegram/getEmail/${jwtToken}` : 'https://www.cloudflare.com/404'
 		const inlineKeyboard = [

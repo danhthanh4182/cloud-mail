@@ -8,6 +8,9 @@ on:
       - "mail-vue/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: write
 jobs:
   Deploy-cloud-mail:
     name: 🏗️ Build and Deploy
@@ -18,9 +21,6 @@ jobs:
       CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN || vars.CUSTOM_DOMAIN }}
       DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID || vars.D1_DATABASE_ID }}
       KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID || vars.KV_NAMESPACE_ID }}
       R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
@@ -60,12 +60,15 @@ jobs:
 
       - name: 🛠️ Set up environment
         working-directory: ./mail-worker
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
         run: |
+          echo "::add-mask::$JWT_SECRET"
           
           echo "🔐 Starting environment setup..."
           
-          if [ -z "$JWT_SECRET" ] || grep -q '[?%#/\\]' <<< "$JWT_SECRET"; then
-            echo "❌ JWT_SECRET variable is empty or contains invalid characters (?, %, #, /, \\)."
+          if [ -z "$JWT_SECRET" ] || grep -qE '[?%#/\\|&"]' <<< "$JWT_SECRET"; then
+            echo "❌ JWT_SECRET variable is empty or contains invalid characters (?, %, #, /, \\, |, &, \")."
             exit 1
           fi
           
@@ -79,15 +82,7 @@ jobs:
             exit 1
           fi
           
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "❌ CLOUDFLARE_ACCOUNT_ID variable cannot be empty."
-            exit 1
-          fi
-          
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "❌ CLOUDFLARE_API_TOKEN variable cannot be empty."
-            exit 1
-          fi
+
           
           if [ -z "$CUSTOM_DOMAIN" ]; then
             echo "::warning:: CUSTOM_DOMAIN variable is not set."
@@ -132,7 +127,19 @@ jobs:
 
       - name: ⚡ Set up KV database
         working-directory: ./mail-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "❌ CLOUDFLARE_ACCOUNT_ID variable cannot be empty."
+            exit 1
+          fi
+
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "❌ CLOUDFLARE_API_TOKEN variable cannot be empty."
+            exit 1
+          fi
           
           CONFIG_FILE="wrangler-action.toml"
           
@@ -170,6 +177,9 @@ jobs:
 
       - name: 🐬 Set up D1 database
         working-directory: ./mail-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           
           CONFIG_FILE="wrangler-action.toml"
@@ -209,6 +219,9 @@ jobs:
       - name: 🚀 Start deployment
         id: deploy
         working-directory: ./mail-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "🚀 Starting deployment..."
           pnpm wrangler deploy -c wrangler-action.toml 2>&1 \
@@ -232,19 +245,22 @@ jobs:
           echo "✅ Setup completed."
 
       - name: ♻️ Initialize database
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
         run: |
+          echo "::add-mask::$JWT_SECRET"
           echo "🛠️ Starting database initialization..."
           sleep 15
-          
+
           WORKER_URL="${CUSTOM_DOMAIN:+https://$CUSTOM_DOMAIN}"
           WORKER_URL="${WORKER_URL:-${{ steps.deploy.outputs.worker_url }}}"
-          
+
           if [ -z "$WORKER_URL" ]; then
             echo "❌ Preview URL not available. Please set CUSTOM_DOMAIN."
             exit 1
           fi
-          
-          HTTP_CODE=$(curl -sL -w "%{http_code}" -o response.txt "$WORKER_URL/api/init/${JWT_SECRET}")
+
+          HTTP_CODE=$(curl -sS -X POST -H "X-Init-Secret: ${JWT_SECRET}" -w "%{http_code}" -o response.txt "$WORKER_URL/api/init")
           RESPONSE_BODY=$(cat response.txt)
 
           if [ "$RESPONSE_BODY" = "success" ]; then
@@ -255,7 +271,7 @@ jobs:
           fi
 
       - name: 🗑️ Delete workflow runs
-        uses: GitRML/delete-workflow-runs@main
+        uses: GitRML/delete-workflow-runs@6c7cf4852e73c46502ee79414d99f5b504cacc6d
         continue-on-error: true
         with:
           retain_days: '1'

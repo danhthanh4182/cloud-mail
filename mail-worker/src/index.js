@@ -30,18 +30,27 @@ export default {
 
 		return env.assets.fetch(req);
 	},
-	email: email,
+	email,
 	async scheduled(c, env, ctx) {
-		if (c.cron === '*/30 * * * *') {
-			await analysisService.refreshEchartsCache({ env })
-			return;
-		}
-
-		await verifyRecordService.clearRecord({ env })
-		await userService.resetDaySendCount({ env })
-		await emailService.completeReceiveAll({ env })
-		await emailService.autoClean({ env })
-		await analysisService.refreshEchartsCache({ env })
-		await oauthService.clearNoBindOathUser({ env })
+		await runScheduledJobs(env);
 	},
 };
+
+export const scheduledJobs = [
+	['clearRecord', (env) => verifyRecordService.clearRecord({ env })],
+	['resetDaySendCount', (env) => userService.resetDaySendCount({ env })],
+	['completeReceiveAll', (env) => emailService.completeReceiveAll({ env })],
+	['autoClean', (env) => emailService.autoClean({ env })],
+	['refreshEchartsCache', (env) => analysisService.refreshEchartsCache({ env })],
+	['clearNoBindOathUser', (env) => oauthService.clearNoBindOathUser({ env })],
+];
+
+export async function runScheduledJobs(env, jobs = scheduledJobs) {
+	for (const [name, run] of jobs) {
+		try {
+			await run(env);
+		} catch (e) {
+			console.error(`scheduled job ${name} failed`, e);
+		}
+	}
+}

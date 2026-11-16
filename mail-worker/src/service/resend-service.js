@@ -1,7 +1,66 @@
 import emailService from './email-service';
 import { emailConst } from '../const/entity-const';
+import cryptoUtils from '../utils/crypto-utils';
+
+const WEBHOOK_TOLERANCE_SECONDS = 300;
+
+function base64ToBytes(value) {
+	const binary = atob(value);
+	return Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+}
 
 const resendService = {
+
+	async verifyWebhookSignature(c, rawBody, nowSeconds = Math.floor(Date.now() / 1000)) {
+
+		const id = c.req.header('svix-id');
+		const timestamp = c.req.header('svix-timestamp');
+		const signature = c.req.header('svix-signature');
+
+		if (!id || !timestamp || !signature) {
+			return false;
+		}
+
+		const secret = c.env?.resend_webhook_secret;
+		if (!secret || !secret.startsWith('whsec_')) {
+			console.error('resend webhook: resend_webhook_secret is missing or malformed');
+			return false;
+		}
+
+		let keyBytes;
+		try {
+			keyBytes = base64ToBytes(secret.slice('whsec_'.length));
+		} catch {
+			console.error('resend webhook: resend_webhook_secret is not valid base64');
+			return false;
+		}
+
+		const ts = Number.parseInt(timestamp, 10);
+		if (!Number.isFinite(ts) || Math.abs(nowSeconds - ts) > WEBHOOK_TOLERANCE_SECONDS) {
+			return false;
+		}
+
+		const signed = `${id}.${ts}.${rawBody}`;
+		const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+		const expected = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signed)));
+
+		for (const entry of signature.split(' ')) {
+			if (!entry.startsWith('v1,')) {
+				continue;
+			}
+			let candidate;
+			try {
+				candidate = base64ToBytes(entry.slice(3));
+			} catch {
+				continue;
+			}
+			if (cryptoUtils.timingSafeEqualBytes(expected, candidate)) {
+				return true;
+			}
+		}
+
+		return false;
+	},
 
 	async webhooks(c, body) {
 

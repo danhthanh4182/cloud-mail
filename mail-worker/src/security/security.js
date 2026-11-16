@@ -5,6 +5,7 @@ import KvConst from '../const/kv-const';
 import dayjs from 'dayjs';
 import userService from '../service/user-service';
 import permService from '../service/perm-service';
+import { matchesPathPrefix } from './path-match';
 import { t } from '../i18n/i18n'
 import app from '../hono/hono';
 
@@ -17,7 +18,6 @@ const exclude = [
 	'/init',
 	'/public/genToken',
 	'/telegram',
-	'/test',
 	'/oauth'
 ];
 
@@ -94,14 +94,14 @@ app.use('*', async (c, next) => {
 	const path = c.req.path;
 
 	const index = exclude.findIndex(item => {
-		return path.startsWith(item);
+		return matchesPathPrefix(path, item);
 	});
 
 	if (index > -1) {
 		return await next();
 	}
 
-	if (path.startsWith('/public')) {
+	if (matchesPathPrefix(path, '/public')) {
 
 		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
 		const publicToken = c.req.header(constant.TOKEN_HEADER);
@@ -132,7 +132,7 @@ app.use('*', async (c, next) => {
 	}
 
 	const permIndex = requirePerms.findIndex(item => {
-		return path.startsWith(item);
+		return matchesPathPrefix(path, item);
 	});
 
 	if (permIndex > -1) {
@@ -142,7 +142,7 @@ app.use('*', async (c, next) => {
 		const userPaths = permKeyToPaths(permKeys);
 
 		const userPermIndex = userPaths.findIndex(item => {
-			return path.startsWith(item);
+			return matchesPathPrefix(path, item);
 		});
 
 		if (userPermIndex === -1 && authInfo.user.email !== c.env.admin) {

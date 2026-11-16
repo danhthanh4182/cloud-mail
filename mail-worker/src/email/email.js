@@ -12,6 +12,12 @@ import userService from '../service/user-service';
 import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
 import webhookService from '../service/webhook-service';
+import { normalizeBlacklist } from '../service/setting-service';
+
+export async function parseRawEmail(message) {
+	const buffer = await new Response(message.raw).arrayBuffer();
+	return PostalMime.parse(buffer);
+}
 
 export async function email(message, env, ctx) {
 
@@ -43,16 +49,7 @@ export async function email(message, env, ctx) {
 			return;
 		}
 
-		const reader = message.raw.getReader();
-		let content = '';
-
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			content += new TextDecoder().decode(value);
-		}
-
-		const email = await PostalMime.parse(content);
+		const email = await parseRawEmail(message);
 
 
 		const blockFlag = checkBlock(blackSubject, blackContent, blackFrom, email);
@@ -204,11 +201,11 @@ export async function email(message, env, ctx) {
 	}
 }
 
-function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
+export function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
 
-	const blackFromList = blackFromStr ? blackFromStr.split(',') : []
-	const blackContentList = blackContentStr ? blackContentStr.split(',') : []
-	const blackSubjectList = blackSubjectStr ? blackSubjectStr.split(',') : []
+	const blackFromList = normalizeBlacklist(blackFromStr).split(',').filter(Boolean)
+	const blackContentList = normalizeBlacklist(blackContentStr).split(',').filter(Boolean)
+	const blackSubjectList = normalizeBlacklist(blackSubjectStr).split(',').filter(Boolean)
 
 	for (const blackSubject of blackSubjectList) {
 		if (email.subject?.includes(blackSubject)) {
@@ -223,7 +220,7 @@ function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
 	}
 
 	for (const blackFrom of blackFromList) {
-		if (email.from.address === blackFrom || emailUtils.getDomain(email.from.address) === blackFrom) {
+		if (email.from?.address === blackFrom || (email.from?.address && emailUtils.getDomain(email.from.address) === blackFrom)) {
 			return true
 		}
 	}
