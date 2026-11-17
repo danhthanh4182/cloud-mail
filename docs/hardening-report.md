@@ -75,3 +75,34 @@ identical; `test:worker` → 2 files / 2 tests; `pnpm --prefix mail-vue build`
 4. GitHub Actions vars/secrets: none renamed (`JWT_SECRET`,
    `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` unchanged); no updates
    needed beyond normal rotation.
+
+## Deployment repair — 2026-11-17
+
+- Root cause: two pipelines deployed the same `cloud-mail` Worker for each
+  `main` push. GitHub Actions deployed the application at 14:04:31 UTC;
+  Cloudflare Workers Builds replaced it with an assets-only deployment at
+  14:04:40 UTC, before database initialization at 14:04:49 UTC.
+- The replacement had no fetch/email/scheduled handlers or DB/KV bindings,
+  and served `mail-vue/index.html` with `/src/main.js` instead of the Vite
+  release bundle. This caused both `POST /api/init` HTTP 404 and the
+  browser's unresolved bare `vue` import.
+- GitHub Actions is the sole production deploy pipeline. The duplicate
+  Workers Builds trigger was removed from this Worker's Build settings;
+  no Worker, database, namespace, or email data was removed. Do not
+  reconnect production auto-builds while Actions deploys the same Worker.
+- The workflow now serializes production runs without cancelling an
+  in-progress deploy, triggers on changes to its own configuration, and
+  preserves Wrangler's exit status under explicit Bash `pipefail`.
+- Regression coverage executes the real deploy step with only the remote
+  Wrangler command substituted: failed deployments must fail the job and
+  publish no URL; successful deployments publish the workers.dev URL.
+- Recovery: merge the workflow repair or run `deploy-cloudflare.yml`
+  through Actions. It uses `mail-worker/wrangler-action.toml`, builds Vue
+  into `mail-worker/dist`, deploys the Worker and bindings together, then
+  initializes the database. Verify Actions completes, the home page uses
+  `/assets/*.js` rather than `/src/main.js`, and the API is reachable.
+- Rollback: revert the workflow change if needed, but do not restore the
+  old root-directory Workers Builds command (`npx wrangler deploy` with
+  no build command): it would overwrite the application again. Migrating
+  to Workers Builds requires the complete Worker config, release build,
+  bindings, and secrets before switching deployment ownership.
