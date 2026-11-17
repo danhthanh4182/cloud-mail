@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "runtime": {"mode": "configuration-only", "orca_available": false},
+  "phase": "design",
+  "roles": {
+    "coordinator": "Resolve blockers, define exclusive file ownership and collect evidence; no self-approval.",
+    "product_designer": "Spec, flow, tokens, mockups and a11y acceptance.",
+    "mobile_engineer": "Flutter native features, typed state, tests and Android integration.",
+    "backend_engineer": "Additive Worker APIs, D1 migrations, ownership and compatibility.",
+    "standards_reviewer": "Review documented engineering/security/design constraints independently.",
+    "spec_reviewer": "Review requirement coverage against spec independently.",
+    "qa_release": "Run critical journeys, verify artifacts/signing and record limitations."
+  },
+  "tasks": [
+    {"id":"T001","role":"product_designer","depends_on":[],"approval_required":false,"status":"in_review"},
+    {"id":"T002","role":"mobile_engineer","depends_on":["T001"],"approval_required":true,"status":"todo"},
+    {"id":"T003","role":"backend_engineer","depends_on":["T001"],"approval_required":true,"status":"todo"},
+    {"id":"T004","role":"mobile_engineer","depends_on":["T002","T003"],"approval_required":true,"status":"todo"},
+    {"id":"T005","role":"mobile_engineer","depends_on":["T004"],"approval_required":true,"status":"todo"},
+    {"id":"T006","role":"mobile_engineer","depends_on":["T005"],"approval_required":true,"status":"todo"},
+    {"id":"T007","role":"mobile_engineer","depends_on":["T004","T006"],"approval_required":true,"status":"todo"},
+    {"id":"T008","role":"backend_engineer","depends_on":["T003"],"approval_required":true,"status":"todo"},
+    {"id":"T009","role":"mobile_engineer","depends_on":["T005","T007","T008"],"approval_required":true,"status":"todo"},
+    {"id":"T010","role":"backend_engineer","depends_on":["T006","T008"],"approval_required":true,"status":"todo"},
+    {"id":"T011","role":"mobile_engineer","depends_on":["T004","T008","T009"],"approval_required":true,"status":"todo"},
+    {"id":"T012","role":"qa_release","depends_on":["T002","T003","T004","T005","T006","T007","T008","T009","T010","T011"],"approval_required":true,"status":"todo"}
+  ]
+}

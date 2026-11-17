@@ -1,0 +1,6 @@
+{
+  "status": "pending",
+  "scope": "specs/001-native-mail/spec.md and design package",
+  "decision_reference": null,
+  "note": "User requested preparation and implementation; detailed product/design review gate has not yet been completed. Do not synthesize approval."
+}
