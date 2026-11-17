@@ -87,7 +87,10 @@ function renderNode(node, out, ctx) {
 			const alt = (node.getAttribute('alt') || '').trim() || 'image';
 			if (isSafeHref((node.getAttribute('src') || '').trim()) || node.getAttribute('alt')) pushText(out, `📷 ${alt}`, ctx);
 		} else {
+			const block = /^(?:p|div|section|article|header|footer|main|aside|figure|figcaption|form|button|h[1-6]|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|blockquote|pre|hr)$/.test(tag);
+			if (block) pushText(out, ' ', ctx);
 			renderChildren(node, out, ctx);
+			if (block) pushText(out, ' ', ctx);
 		}
 		return;
 	}

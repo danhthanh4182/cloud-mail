@@ -26,6 +26,11 @@ describe('htmlToTelegram', () => {
 		expect(out).toBe('<a href="https://x.test">Read &lt;scrip&lt;b&gt;t&gt;📷 Banner</a>');
 	});
 
+	it('keeps word boundaries between block elements inside links', () => {
+		const out = htmlToTelegram('<a href="https://x.test">Hello<div>World</div><p>Again</p></a>');
+		expect(out).toBe('<a href="https://x.test">Hello World Again</a>');
+	});
+
 	it('removes trailing table separators while preserving interior pipes and new lines', () => {
 		const out = htmlToTelegram('<div>left | right | | </div><div>next | row |</div>');
 		expect(out).toBe('left | right\n\nnext | row');
