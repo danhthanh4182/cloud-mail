@@ -11,6 +11,7 @@ Current phase: specification/design. Product approval is pending in `.harness/ap
 ## Commands
 - `python3 scripts/harness.py verify`: source guardrails, required artifacts, internal links, DAG and design tokens.
 - `python3 -m unittest discover -s tests/harness -v`: harness behavioral tests, including rejected cases.
+- `npm ci --prefix .harness && npm run test:design --prefix .harness`: prototype search/theme/reader and rendered target/focus checks (install Playwright browser first).
 - `python3 scripts/harness.py status`: tasks ready/blocked and phase.
 - `python3 scripts/harness.py release-check`: deliberately fails until approvals and all release evidence exist.
 - `bash .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`: Spec Kit structure.

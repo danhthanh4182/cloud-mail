@@ -18,3 +18,9 @@ jobs:
       - run: python3 scripts/harness.py verify
       - run: bash .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
       - run: python3 scripts/harness.py status
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix .harness
+      - run: npm exec --prefix .harness -- playwright install --with-deps chromium
+      - run: npm run test:design --prefix .harness

@@ -1,0 +1,6 @@
+{
+  "name": "cloud-mail-design-harness",
+  "private": true,
+  "scripts": {"test:design": "node ../scripts/check-mockup.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}
