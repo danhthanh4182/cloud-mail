@@ -68,7 +68,7 @@ function inlineText(node, ctx) {
 		ctx.done = true;
 		ctx.truncated = ctx.truncated || sub.truncated;
 	}
-	return out.join('').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+	return out.join('').replace(/\s+/g, ' ').trim();
 }
 
 function renderNode(node, out, ctx) {
@@ -79,6 +79,18 @@ function renderNode(node, out, ctx) {
 	}
 	if (node.nodeType !== 1) return;
 	const tag = (node.tagName || '').toLowerCase();
+	if (ctx.raw) {
+		if (['script', 'style', 'title', 'noscript', 'template', 'head', 'meta', 'link', 'input', 'select', 'textarea'].includes(tag)) return;
+		if (tag === 'br') {
+			pushText(out, ' ', ctx);
+		} else if (tag === 'img') {
+			const alt = (node.getAttribute('alt') || '').trim() || 'image';
+			if (isSafeHref((node.getAttribute('src') || '').trim()) || node.getAttribute('alt')) pushText(out, `📷 ${alt}`, ctx);
+		} else {
+			renderChildren(node, out, ctx);
+		}
+		return;
+	}
 
 	switch (tag) {
 		case 'script':
@@ -268,6 +280,16 @@ function renderNode(node, out, ctx) {
 	}
 }
 
+function trimTableSeparators(line) {
+	let end = line.length;
+	let sawPipe = false;
+	while (end > 0 && (line[end - 1] === '|' || line[end - 1] === ' ' || line[end - 1] === '\t')) {
+		if (line[end - 1] === '|') sawPipe = true;
+		end--;
+	}
+	return sawPipe ? line.slice(0, end) : line;
+}
+
 function cleanup(tgHtml) {
 	const pres = [];
 	const token = id => `\u0000PRE${id}\u0000`;
@@ -277,10 +299,7 @@ function cleanup(tgHtml) {
 	});
 	const lines = kept
 		.split('\n')
-		.map(line => line
-			.replace(/[ \t]+/g, ' ')
-			.replace(/(\s*\|\s*)+$/g, '')
-			.trim())
+		.map(line => trimTableSeparators(line.replace(/[ \t]+/g, ' ')).trim())
 		.join('\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();

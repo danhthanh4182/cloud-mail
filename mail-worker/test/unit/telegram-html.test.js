@@ -16,6 +16,26 @@ describe('htmlToTelegram', () => {
 		expect(out).not.toContain('javascript:');
 	});
 
+	it('preserves literal tag-like link text instead of stripping it as markup', () => {
+		const out = htmlToTelegram('<a href="https://x.test">Use &lt;b&gt; literally &amp; safely</a>');
+		expect(out).toBe('<a href="https://x.test">Use &lt;b&gt; literally &amp; safely</a>');
+	});
+
+	it('flattens formatted link labels without reconstructing injected markup', () => {
+		const out = htmlToTelegram('<a href="https://x.test"><strong>Read</strong><br><span>&lt;scrip&lt;b&gt;t&gt;</span><img src="https://x.test/i.png" alt="Banner"></a>');
+		expect(out).toBe('<a href="https://x.test">Read &lt;scrip&lt;b&gt;t&gt;📷 Banner</a>');
+	});
+
+	it('removes trailing table separators while preserving interior pipes and new lines', () => {
+		const out = htmlToTelegram('<div>left | right | | </div><div>next | row |</div>');
+		expect(out).toBe('left | right\n\nnext | row');
+	});
+
+	it('handles long pipe-rich lines without excessive backtracking', () => {
+		const text = '| '.repeat(1200) + 'end';
+		expect(htmlToTelegram(`<p>${text}</p>`)).toBe(text);
+	}, 5000);
+
 	it('renders lists with markers and numbering', () => {
 		const out = htmlToTelegram('<ul><li>a</li><li>b</li></ul><ol><li>x</li><li>y</li></ol>');
 		expect(out).toContain('• a');
@@ -76,9 +96,25 @@ describe('emailMsgTemplate with html body', () => {
 		expect(msg).toContain('<a href="https://x.test/buy">Buy now</a>');
 	});
 
+	it('prefers HTML paragraphs when plain text is flattened and entity encoded', () => {
+		const msg = emailMsgTemplate({ subject: 'Domain offer', text: 'Hello,&nbsp;I noticed you own example.com.Kind regards,Sender', content: '<p>Hello,&nbsp;I noticed you own example.com.</p><p>Kind regards,<br>Sender</p>' }, 'hide', 'hide', 'show');
+		expect(msg).toContain('Hello, I noticed you own example.com.\n\nKind regards,\nSender');
+		expect(msg).not.toContain('&amp;nbsp;');
+	});
+
+	it('normalizes encoded and literal nonbreaking spaces in text-only emails', () => {
+		const msg = emailMsgTemplate({ subject: 'Hello', text: 'Hello,&nbsp;there\u00a0friend' }, 'hide', 'hide', 'show');
+		expect(msg).toContain('Hello, there friend');
+	});
+
+	it('falls back to plain text when HTML has no visible content', () => {
+		const msg = emailMsgTemplate({ subject: 'Notice', text: 'Readable text', content: '<style>p{color:red}</style>' }, 'hide', 'hide', 'show');
+		expect(msg).toContain('Readable text');
+	});
+
 	it('keeps plain-text path unchanged', () => {
 		const msg = emailMsgTemplate(
-			{ subject: 'Hi', name: '', sendEmail: '', toEmail: '', text: 'a <b> b', content: '<p>ignored</p>' },
+			{ subject: 'Hi', name: '', sendEmail: '', toEmail: '', text: 'a <b> b', content: '' },
 			'hide', 'hide', 'show'
 		);
 		expect(msg).toContain('a &lt;b&gt; b');

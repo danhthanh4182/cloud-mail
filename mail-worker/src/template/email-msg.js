@@ -49,16 +49,15 @@ To：\u200B${escapeHtml(email.toEmail || '')}`
 To：\u200B${escapeHtml(email.toEmail || '')}`
 	}
 
-	const rawText = emailUtils.formatText(email.text);
+	const rawText = emailUtils.formatText((email.text || '').replace(/&nbsp;|&#160;|&#x0*a0;|\u00a0/gi, ' '));
 
 	if(tgMsgText === 'show') {
 		const prefix = `${template}
 
 `;
 		const maxTextLength = Math.max(0, TELEGRAM_MESSAGE_LIMIT - prefix.length);
-		const body = rawText
-			? truncateText(escapeHtml(rawText), maxTextLength)
-			: htmlToTelegram(email.content, maxTextLength);
+		const body = htmlToTelegram(email.content, maxTextLength)
+			|| truncateText(escapeHtml(rawText), maxTextLength);
 		template += `
 
 ${body}`
