@@ -4,3 +4,5 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   vue-demi: true
+overrides:
+  'workbox-build>glob': ^14.0.2
