@@ -1,3 +1,4 @@
+import { htmlToTelegram } from '../utils/telegram-html';
 import emailUtils from '../utils/email-utils';
 
 const TELEGRAM_MESSAGE_LIMIT = 3500;
@@ -48,16 +49,19 @@ To：\u200B${escapeHtml(email.toEmail || '')}`
 To：\u200B${escapeHtml(email.toEmail || '')}`
 	}
 
-	const text = escapeHtml(emailUtils.formatText(email.text) || emailUtils.htmlToText(email.content));
+	const rawText = emailUtils.formatText(email.text);
 
 	if(tgMsgText === 'show') {
 		const prefix = `${template}
 
 `;
 		const maxTextLength = Math.max(0, TELEGRAM_MESSAGE_LIMIT - prefix.length);
+		const body = rawText
+			? truncateText(escapeHtml(rawText), maxTextLength)
+			: htmlToTelegram(email.content, maxTextLength);
 		template += `
 
-${truncateText(text, maxTextLength)}`
+${body}`
 	}
 
 	return template;
