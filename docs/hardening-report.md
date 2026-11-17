@@ -106,3 +106,17 @@ identical; `test:worker` → 2 files / 2 tests; `pnpm --prefix mail-vue build`
   no build command): it would overwrite the application again. Migrating
   to Workers Builds requires the complete Worker config, release build,
   bindings, and secrets before switching deployment ownership.
+
+## Analytics tooltip and dependency updates — 2026-11-17
+
+- Sender chart tooltips render names as text nodes, preventing stored HTML
+  from being interpreted as markup. Regression tests cover malicious names
+  and ordinary names containing HTML-significant characters.
+- Worker and frontend dependencies were updated; full `pnpm audit --json`
+  reported no advisories in either lockfile at the time of verification.
+- The Worker test harness uses `@cloudflare/vitest-plugin`; its Worker module
+  is loaded before request tests so first-load compilation does not consume
+  the request timeout. The plugin currently pins a beta Miniflare build.
+- Workbox's `glob` dependency is overridden to version 14 to pick up security
+  fixes; its manifest generation was checked with nested and ignored files.
+  Revisit the override when Workbox supports a patched version directly.
