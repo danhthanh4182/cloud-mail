@@ -94,14 +94,16 @@ class MailAddress {
 }
 
 class MailMessage {
-  final int id, accountId, version;
-  final String subject, sender, name, to, text, content, time, folder;
+  final int id, accountId, version, type;
+  final String subject, sender, name, to, text, content, time, folder, cc;
   final bool unread, starred;
   final List<String> labels;
   final List<Map<String, dynamic>> attachments;
   const MailMessage({
     required this.id,
     this.accountId = 0,
+    this.type = 0,
+    this.cc = '',
     this.version = 0,
     this.subject = '',
     this.sender = '',
@@ -120,10 +122,18 @@ class MailMessage {
     id: asInt(j['emailId']),
     accountId: asInt(j['accountId']),
     version: asInt(j['version']),
+    type: asInt(j['type']),
+    cc: decodeList(j['cc'])
+        .map((x) => x is Map ? asText(x['address']) : '$x')
+        .join(', '),
     subject: asText(j['subject']),
     sender: asText(j['sendEmail']),
     name: asText(j['name']),
-    to: asText(j['toEmail']),
+    to: decodeList(j['recipient']).isNotEmpty
+        ? decodeList(j['recipient'])
+              .map((x) => x is Map ? asText(x['address']) : '$x')
+              .join(', ')
+        : asText(j['toEmail']),
     text: asText(j['text']),
     content: asText(j['content']),
     time: asText(j['createTime']),
@@ -151,6 +161,8 @@ class MailMessage {
     accountId: accountId,
     version: version ?? this.version,
     subject: subject,
+    type: type,
+    cc: cc,
     sender: sender,
     name: name,
     to: to,
@@ -167,6 +179,8 @@ class MailMessage {
     'emailId': id,
     'accountId': accountId,
     'version': version,
+    'type': type,
+    'cc': cc.split(', ').where((x) => x.isNotEmpty).toList(),
     'subject': subject,
     'sendEmail': sender,
     'name': name,
@@ -235,8 +249,13 @@ class MailDraft {
   bool get hasContent =>
       [to, cc, bcc, subject, body].any((x) => x.trim().isNotEmpty) ||
       attachments.isNotEmpty;
-  bool get outcomeUncertain =>
-      ['sending', 'unknown', 'pending'].contains(sendState);
+  bool get outcomeUncertain => [
+    'sending',
+    'unknown',
+    'pending',
+    'partial',
+    'notSubmitted',
+  ].contains(sendState);
   Map<String, dynamic> toJson() => {
     'id': id,
     'accountId': accountId,

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-native-mail`  
 **Created**: 2026-11-18  
-**Status**: Draft for product/design review; no native implementation claimed.  
+**Status**: Approved for implementation by user on 2026-11-19. Native daily-client milestone in progress; complete-release acceptance remains pending.
 **Input**: Người dùng yêu cầu APK hoàn chỉnh, đẹp, có design system và trải nghiệm thông minh như Gmail; không chấp nhận ứng dụng chỉ bọc WebView. Áp dụng Spec Kit, Superpowers, Ask Matt và SDLC. Không commit file build vào Git.
 
 ## Intent and proposed product boundary

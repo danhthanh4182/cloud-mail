@@ -32,7 +32,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
       accountId: m.accountId,
       replyId: m.id,
       sendType: forward ? 'forward' : 'reply',
-      to: forward ? '' : m.sender,
+      to: forward
+          ? ''
+          : m.type == 1
+          ? m.to
+          : m.sender,
       subject: '${forward ? 'Fwd' : 'Re'}: ${m.subject}',
       body: '\n\n—— ${m.displayName} · ${m.time} ——\n${m.body}',
     );
@@ -230,6 +234,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           color: c.onSurfaceVariant,
                         ),
                       ),
+                      if (m.cc.isNotEmpty)
+                        Text(
+                          'CC: ${m.cc}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: c.onSurfaceVariant,
+                          ),
+                        ),
                       Text(
                         m.time,
                         style: TextStyle(

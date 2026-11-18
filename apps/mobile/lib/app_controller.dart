@@ -83,7 +83,13 @@ class AppController extends ChangeNotifier {
             .map((x) => MailAddress.fromJson(Map<String, dynamic>.from(x)))
             .toList();
         await _restoreDrafts();
-        await loadMessages();
+        final cached = await vault.read(_cacheKey);
+        if (cached != null) {
+          messages = decodeList(jsonDecode(cached))
+              .map((x) => MailMessage.fromJson(Map<String, dynamic>.from(x)))
+              .toList();
+        }
+        offline = true;
         final generation = _generation;
         try {
           final actual = await api!.request('GET', '/my/loginUserInfo');
@@ -158,7 +164,9 @@ class AppController extends ChangeNotifier {
       folder = 'inbox';
       selectedAddress = null;
       await _fetchAddresses();
+      _requireGeneration(generation);
       await _fetchCapabilities();
+      _requireGeneration(generation);
       await _restoreDrafts();
       if (generation != _generation) return;
       await _saveSession();
@@ -180,13 +188,22 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  void _requireGeneration(int generation) {
+    if (_disposed || generation != _generation || !signedIn) {
+      throw const ApiFailure(401, 'Session changed');
+    }
+  }
+
   Future<void> _fetchCapabilities() async {
+    final client = api!, generation = _generation;
     try {
-      final data = await api!.request('GET', '/mobile/capabilities');
+      final data = await client.request('GET', '/mobile/capabilities');
+      _requireGeneration(generation);
       capabilities = data is Map
           ? Capabilities.fromJson(Map<String, dynamic>.from(data))
           : const Capabilities();
     } on ApiFailure catch (e) {
+      _requireGeneration(generation);
       if (e.code != 404) rethrow;
       capabilities = const Capabilities();
     }
@@ -234,7 +251,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _restoreDrafts() async {
+    final generation = _generation;
     final saved = await vault.read('drafts:$scope');
+    _requireGeneration(generation);
     drafts = saved == null
         ? []
         : decodeList(jsonDecode(saved))
@@ -340,6 +359,10 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> selectFolder(String value) async {
+    if (['archive', 'spam', 'trash'].contains(value) &&
+        !capabilities.organization) {
+      throw const ApiFailure(503, 'The server needs the mobile API update');
+    }
     folder = value;
     messages = [];
     hasMore = false;
@@ -390,6 +413,7 @@ class AppController extends ChangeNotifier {
             'emailIds': [mail.id],
           },
         );
+        _requireGeneration(generation);
         current = current.copy(unread: false);
         _replace(current);
       } on ApiFailure catch (e) {
@@ -501,8 +525,9 @@ class AppController extends ChangeNotifier {
     }
     if (draft.requestKey.isEmpty) draft.requestKey = newId();
     draft.sendState = 'pending';
-    await saveDraft(draft);
     final client = api!, generation = _generation;
+    await saveDraft(draft);
+    _requireGeneration(generation);
     try {
       final response = await client.request(
         'POST',
@@ -529,8 +554,27 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<String> retryMissingIntent(MailDraft draft) async {
+    if (draft.sendState != 'notSubmitted') {
+      throw const ApiFailure(409, 'Reconcile the send first');
+    }
+    draft.sendState = '';
+    return sendDraft(draft);
+  }
+
   Future<String> reconcile(MailDraft draft) async {
-    final data = await api!.request('GET', '/mobile/send/${draft.requestKey}');
+    final client = api!, generation = _generation;
+    Object? data;
+    try {
+      data = await client.request('GET', '/mobile/send/${draft.requestKey}');
+    } on ApiFailure catch (e) {
+      _requireGeneration(generation);
+      if (e.code != 404) rethrow;
+      draft.sendState = 'notSubmitted';
+      await saveDraft(draft);
+      return draft.sendState;
+    }
+    _requireGeneration(generation);
     draft.sendState = asText((data as Map)['state']);
     if (draft.sendState == 'accepted') {
       await deleteDraft(draft);
@@ -541,7 +585,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> summarize(MailMessage mail) async {
-    final result = await api!.request('POST', '/mobile/assistant/${mail.id}');
+    final client = api!, generation = _generation;
+    final result = await client.request('POST', '/mobile/assistant/${mail.id}');
+    _requireGeneration(generation);
     return Map<String, dynamic>.from(result as Map);
   }
 
@@ -573,6 +619,7 @@ class AppController extends ChangeNotifier {
     drafts = [];
     capabilities = const Capabilities();
     busy = false;
+    ready = true;
     loading = false;
     offline = false;
     error = '';

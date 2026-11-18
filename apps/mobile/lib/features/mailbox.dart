@@ -122,8 +122,8 @@ class _MailboxScreenState extends State<MailboxScreen>
                   for (final entry in {
                     'subject': s.t('Tiêu đề', 'Subject'),
                     'content': s.t('Nội dung', 'Body'),
-                    'sendEmail': s.t('Người gửi', 'Sender'),
-                    'receiveEmail': s.t('Người nhận', 'Recipient'),
+                    'senderAddress': s.t('Người gửi', 'Sender'),
+                    'recipientAddress': s.t('Người nhận', 'Recipient'),
                   }.entries)
                     ChoiceChip(
                       label: Text(entry.value),
@@ -261,9 +261,11 @@ class _MailboxScreenState extends State<MailboxScreen>
                   'inbox',
                   'sent',
                   'star',
-                  'archive',
-                  'spam',
-                  'trash',
+                  if (s.capabilities.organization) ...[
+                    'archive',
+                    'spam',
+                    'trash',
+                  ],
                   'drafts',
                   'settings',
                 ])
@@ -535,6 +537,7 @@ class _MailboxScreenState extends State<MailboxScreen>
                         child: OtpCard(
                           state: s,
                           code: m.code,
+                          compact: true,
                           sender: m.displayName,
                         ),
                       ),

@@ -62,11 +62,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Icon(Icons.mail_outline, color: c.onPrimary),
                         ),
                         const SizedBox(width: 12),
-                        Text(
-                          'Cloud Mail',
-                          style: Theme.of(context).textTheme.titleLarge,
+                        Expanded(
+                          child: Text(
+                            'Cloud Mail',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                         ),
-                        const Spacer(),
                         IconButton(
                           tooltip: s.t('Ngôn ngữ', 'Language'),
                           onPressed: () => s.updatePreferences(

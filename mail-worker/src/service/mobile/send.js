@@ -17,8 +17,15 @@ export async function sendOnce(db, userId, key, payload, provider) {
  let state='unknown', result=null;
  try {
   const response=await provider();
-  result={sentRecipients:response?.sentRecipients||[],failedRecipients:response?.failedRecipients||[]};
-  state=result.sentRecipients.length?(result.failedRecipients.length?'partial':'accepted'):'rejected';
+  const emails=Array.isArray(response)?response:response?.emails;
+  if(Array.isArray(emails)&&emails.length){
+   const sentRecipients=emails.flatMap(item=>{try{return JSON.parse(item.recipient||'[]').map(r=>r.address).filter(Boolean);}catch{return [];}});
+   result={sentRecipients:sentRecipients.length?sentRecipients:payload.receiveEmail||[],failedRecipients:response?.failedRecipients||[]};
+   state=result.failedRecipients.length?'partial':'accepted';
+  }else if(Array.isArray(response?.sentRecipients)&&response.sentRecipients.length){
+   result={sentRecipients:response.sentRecipients,failedRecipients:response.failedRecipients||[]};state=result.failedRecipients.length?'partial':'accepted';
+  }
+  // An unfamiliar or empty provider result cannot prove a definitive rejection.
  } catch { /* Provider may have accepted. Never retry here or leak provider exceptions. */ }
  await db.prepare('UPDATE mobile_send_intent SET state=?,result=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND request_key=?').bind(state,result?JSON.stringify(result):null,userId,key).run();
  return {state,requestKey:key,result};

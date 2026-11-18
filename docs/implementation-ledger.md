@@ -13,3 +13,18 @@ Independent web architecture review: https://chatgpt.com/uc/6afdedd8-560c-83ea-8
 Ruling: app ID dev.danhthanh.cloudmail.nativeapp keeps the native client separate from the previous wrapper. Cost: existing wrapper session does not migrate; sign-in is required.
 Ruling: CI creates debug test-signed artifacts while production signing is unconfigured. Cost: clean runners may produce different test signatures, so this is not an in-place production upgrade channel.
 Pending: main native journeys/device evidence, rich HTML fidelity, sync/threading, assistant rules/search and FCM push. Do not mark T009–T012 complete on an APK compile alone.
+
+## Fresh whole-branch review and one fix pass
+Reviewer `/root/native_final_review` reviewed the original implementation vs baseline with a fresh context. It did not execute suites or inspect an APK; it explicitly declined to judge subsequent fixes and hardware behavior. All reported Critical/Important findings entered this fix pass:
+
+- Provider result shape: together mode returns saved email array, not sentRecipients. Regression observed rejected→accepted RED→GREEN using the actual adapter shape. Unknown/empty provider result remains unknown; never invite a new-key retry.
+- Identity races: send captures client/generation before draft persistence; reconciliation, capabilities, restored drafts, assistant and read completion reject stale sessions. Two identity race tests observed RED→GREEN. Session deletion is serialized with persistence.
+- Restore validates authenticated identity before any network inbox fetch/cache write. Regression verifies zero mail requests on mismatch and ready=true after logout.
+- Interrupted before request: definitive missing intent allows explicit immutable same-key replay; editor stays locked. Recovery test first failed with missing method, then passes against 404→same-key accepted. Partial sends stay locked for reconciliation.
+- Legacy organization navigation is gated and controller refuses unsupported folders. Migrated Trash/Archive/Starred include owned sent mail; route regressions observed RED→GREEN and foreign attachment access remains 404.
+- Assistant masks labeled passwords/tokens, JWTs, API keys, codes and URLs; rejects credential/link output. Source evidence is mandatory. Redaction cannot prove an arbitrary secret is absent; explicit summary consent and original-source verification remain necessary.
+- Migration readiness checks every required mobile table, not only one. Partial-schema test observed RED→GREEN.
+- Layout regression exposed overflow at 360px / 200%; flexible branding and compact OTP fix it. Six width/scale cases now pass.
+
+Verification after fixes: Flutter analyze clean; 26 Flutter tests pass including six native layout combinations and real-widget preview capture. Worker 91 unit + 2 Cloudflare runtime tests pass. Five harness behavioral tests pass. No reviewer minors were reported. No production email or migration ran.
+Native previews render real Flutter widgets with fictional fixtures, not an installed-device screenshot. APK/device behavior still requires acceptance. CI first build completed its APK/signature/upload steps; the corrected commit will rebuild before distribution.

@@ -141,6 +141,34 @@ class _ComposeScreenState extends State<ComposeScreen>
     }
   }
 
+  Future<void> retryMissing() async {
+    final ctx = context;
+    if (!await confirm(
+      ctx,
+      s,
+      s.t('Thử lại cùng lần gửi?', 'Retry the same send?'),
+      s.t(
+        'Máy chủ chưa tìm thấy lần gửi. Nội dung và khóa gửi cũ được giữ để tránh trùng.',
+        'No intent was found. The same immutable content and key will be reused.',
+      ),
+    )) {
+      return;
+    }
+    if (!ctx.mounted) return;
+    setState(() => sending = true);
+    try {
+      final status = await s.retryMissingIntent(d);
+      if (ctx.mounted) {
+        showNotice(ctx, status);
+        if (status == 'accepted') Navigator.pop(ctx);
+      }
+    } catch (e) {
+      if (ctx.mounted) showNotice(ctx, e.toString());
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
   Future<void> send() async {
     try {
       if (!s.addresses.any((a) => a.id == d.accountId)) {
@@ -272,6 +300,19 @@ class _ComposeScreenState extends State<ComposeScreen>
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+              if (d.sendState == 'notSubmitted')
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: OutlinedButton(
+                    onPressed: sending ? null : retryMissing,
+                    child: Text(
+                      s.t(
+                        'Thử lại cùng khóa gửi',
+                        'Retry with the same send key',
+                      ),
                     ),
                   ),
                 ),

@@ -1,6 +1,6 @@
 # Tasks · 001-native-mail
 
-All implementation tasks are TODO. T001 documentation is prepared but awaits product/design review. Every task ends with implementation evidence and Standards + Spec review. Do not check a task merely because its file exists.
+T001 is approved. Native daily-client source and Actions APK are implemented in PR #9; T002–T008 have implementation evidence with device acceptance pending. T009–T012 remain partial/pending; see `docs/implementation-ledger.md`. Every task ends with implementation evidence and Standards + Spec review. Do not check a task merely because its file exists.
 
 | ID | Task / deliverable | Blocks on | Requirements | Acceptance evidence |
 |---|---|---|---|---|

@@ -113,15 +113,54 @@ class EmptyPanel extends StatelessWidget {
 class OtpCard extends StatelessWidget {
   final AppController state;
   final String code, sender;
+  final bool compact;
   const OtpCard({
     super.key,
     required this.state,
     required this.code,
     required this.sender,
+    this.compact = false,
   });
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
+    if (compact) {
+      return Container(
+        padding: const EdgeInsets.only(left: 12, right: 4),
+        decoration: BoxDecoration(
+          color: c.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                code,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 2,
+                  color: c.primary,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: state.t(
+                'Sao chép mã xác nhận',
+                'Copy verification code',
+              ),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: code));
+                if (context.mounted) {
+                  showNotice(context, state.t('Đã sao chép mã', 'Code copied'));
+                }
+              },
+              icon: Icon(Icons.copy_outlined, color: c.primary, size: 20),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(

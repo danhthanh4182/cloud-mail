@@ -1,7 +1,7 @@
 # Cloud Mail Native Implementation Plan
 
 **Branch:** `001-native-mail` · **Date:** 2026-11-18 · **Spec:** [spec.md](spec.md)  
-**Status:** Proposed, implementation gated on product/design approval.
+**Status:** Approved for implementation on 2026-11-19. Execution/evidence: `docs/implementation-ledger.md`.
 
 **Goal:** Native Android email application satisfying US01–US08, with honest milestones and Actions-only binaries.
 **Architecture:** Flutter presentation and Material 3 design system; feature modules expose repository interfaces to typed legacy/mobile API adapters. A sync coordinator owns encrypted cache and optimistic mutations. Worker extensions preserve web/Telegram APIs and add capabilities, owned state, AI jobs and push.
@@ -44,4 +44,4 @@ Domain: OTP candidate selection, recipient parser, reply/thread relation, draft 
 `flutter analyze`; `flutter test`; `flutter test integration_test --device-id <controlled-emulator>`; `npm --prefix mail-worker test` or repository's verified scripts; `flutter build apk --debug` for test artifact; `flutter build appbundle --release` only with configured release signing. Record exact actual commands/versions and results in release evidence.
 
 ## Constitution check
-Requirement traceability and status are present; new API is separated from existing; artifacts remain external; privacy/integrity/a11y risks have tasks. Pending gates: user design approval; resolved plugin minimums; Flutter/backend tests; credentials/config for live push; representative-device evidence; production signing. Do not turn pending gates into green checkmarks.
+Requirement traceability and status are present; new API is separated from existing; artifacts remain external; privacy/integrity/a11y risks have tasks. Pending release gates: Flutter/backend tests; credentials/config for live push; representative-device evidence; production signing. Do not turn pending gates into green checkmarks.
