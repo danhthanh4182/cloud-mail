@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 # Flutter client alongside the existing Vue webmail
 

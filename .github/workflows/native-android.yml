@@ -1,0 +1,66 @@
+name: Native Android APK
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'mail-worker/**'
+      - 'specs/001-native-mail/**'
+      - '.github/workflows/native-android.yml'
+  push:
+    branches: ['codex/native-implementation']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - run: pnpm install --frozen-lockfile
+        working-directory: mail-worker
+      - run: pnpm test && pnpm test:worker
+        working-directory: mail-worker
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+      - run: flutter --version && flutter pub get --enforce-lockfile
+        working-directory: apps/mobile
+      - run: dart format --output=none --set-exit-if-changed lib test
+        working-directory: apps/mobile
+      - run: flutter analyze && flutter test
+        working-directory: apps/mobile
+      - run: python3 scripts/harness.py verify
+      - name: Build test-signed native APK
+        run: flutter build apk --debug --build-number=${{ github.run_number }}
+        working-directory: apps/mobile
+      - name: Verify and describe test artifact
+        shell: bash
+        run: |
+          mkdir -p native-artifact
+          cp apps/mobile/build/app/outputs/flutter-apk/app-debug.apk native-artifact/cloud-mail-native-debug.apk
+          APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APK_SIGNER" verify --verbose --print-certs native-artifact/cloud-mail-native-debug.apk > native-artifact/signature.txt
+          sha256sum native-artifact/cloud-mail-native-debug.apk > native-artifact/SHA256SUMS
+          printf 'source=%s\nkind=test-signed debug APK\napplicationId=dev.danhthanh.cloudmail.nativeapp\nbackend=mobile routes and D1 migration required for organization/safe send\n' "$GITHUB_SHA" > native-artifact/BUILD-INFO.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloud-mail-native-debug-${{ github.sha }}
+          path: native-artifact/
+          retention-days: 14
+          if-no-files-found: error

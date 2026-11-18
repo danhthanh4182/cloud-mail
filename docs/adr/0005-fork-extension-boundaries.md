@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 # Keep mobile extensions in the fork with explicit upstream merge boundaries
 

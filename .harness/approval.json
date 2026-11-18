@@ -1,6 +1,6 @@
 {
-  "status": "pending",
+  "status": "approved",
   "scope": "specs/001-native-mail/spec.md and design package",
-  "decision_reference": null,
-  "note": "User requested preparation and implementation; detailed product/design review gate has not yet been completed. Do not synthesize approval."
+  "decision_reference": "User message 2026-11-19: Triển khai đi. Kết hợp chat work mode và chat gpt web chat",
+  "note": "Product scope, Flutter direction, design package and planned test seams approved for implementation. No production deploy/merge authorization."
 }

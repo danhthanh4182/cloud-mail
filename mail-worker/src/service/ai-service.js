@@ -1,3 +1,4 @@
+import { extractVerificationCode } from './mobile/domain';
 import emailUtils from '../utils/email-utils';
 import { settingConst } from '../const/entity-const';
 
@@ -18,6 +19,10 @@ const aiService = {
 			if (!subject && !body) {
 				return '';
 			}
+
+			const deterministic = extractVerificationCode(subject, body);
+			if (deterministic) return deterministic;
+			if (!ai) return '';
 
 			const result = await ai.run(c.env.ai_model || '@cf/meta/llama-3.1-8b-instruct-fast', {
 				messages: [
@@ -40,13 +45,13 @@ const aiService = {
 				return '';
 			}
 
-			if (json.code.length > 8 || /\s/.test(json.code)) {
+			if (!/^[A-Za-z0-9]{4,8}$/.test(json.code) || !`${subject}\n${body}`.includes(json.code)) {
 				return '';
 			}
 
 			return json.code;
 		} catch (e) {
-			console.error('验证码提取失败: ', e);
+			// Do not log provider errors containing private source email.
 			return '';
 		}
 	},

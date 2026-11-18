@@ -1,6 +1,6 @@
 # Cloud Mail Engineering Constitution
 
-Version: 1.0.0 · Ratified: 2026-11-18 · Status: proposed, except explicit user constraints below.
+Version: 1.0.0 · Ratified: 2026-11-18 · Status: accepted by user implementation approval on 2026-11-19.
 
 1. **Native application**: Android screens use native-rendered widgets and direct API calls. Hosting the existing website in a WebView does not satisfy the product requirement.
 2. **Specification before implementation**: Every user journey has acceptance criteria, a task owner, dependencies and test evidence. Proposed decisions and untested behavior are labeled honestly.
