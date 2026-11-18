@@ -1,6 +1,6 @@
 # QA strategy and evidence
 
-Status: specification/design stage. No Flutter/native-client runtime, backend-extension or production-compatibility tests have run. The old wrapper APK passed compilation/signature checks but does NOT validate this new product.
+Status: native daily-client implementation milestone, PR #9. Flutter analyze and 27 automated Flutter tests pass; Worker 91 unit and 3 runtime tests pass. The native APK is built through Actions. Device/live-send/push/production compatibility acceptance remains pending. The old wrapper build is superseded and is not native-product evidence.
 
 ## Planned matrix
 | Area | Cases | Environment / gate |
@@ -20,8 +20,8 @@ Status: specification/design stage. No Flutter/native-client runtime, backend-ex
 |---|---|---|
 | 2026-11-18 | Source/API inventory | Read baseline files; listed research.md |
 | 2026-11-18 | Official Spec Kit init | CLI scaffold completed; upstream revision in research.md |
-| Pending | Native unit/widget/device suite | Not run; client not yet implemented |
-| Pending | Worker additive migrations/security tests | Not run; proposed endpoints not implemented |
+| 2026-11-18 UTC | Native analysis/unit/widget | Passed locally and in Actions; 360/412/840px × 100/200% text; hardware acceptance pending |
+| 2026-11-18 UTC | Worker additive migration/ownership/send/assistant tests | 91 unit + 3 Cloudflare runtime passed; production migration not run |
 | Pending | Live deployment acceptance/push | Requires configured controlled deployment and credentials |
 
 Coverage numbers and performance measurements are published only from actual runs. A mockup screenshot is design evidence, never evidence of APK behavior.
@@ -31,7 +31,7 @@ Coverage numbers and performance measurements are published only from actual run
 - `python3 -m unittest discover -s tests/harness -v`: 5 tests passed. Negative cases reject tracked APK/keys, DAG cycles, stale evidence and missing decision/check references.
 - `python3 scripts/harness.py verify`: passed source/design structure and guardrail checks (not runtime application tests).
 - Official `check-prerequisites.sh --json --require-tasks --include-tasks`: resolved this feature and required task documents.
-- `python3 scripts/harness.py release-check`: failed as intended because design approval, native app and release evidence are pending. This failure is expected, not waived.
+- `python3 scripts/harness.py release-check`: failed in design phase as intended. Design is now approved; complete device/integration/signing evidence remains pending. This failure is expected, not waived.
 - Headless prototype interaction check: rendered light/dark/wireframe/component boards; tested search, empty results, reader navigation and simulated-send confirmation with no page errors. Local Chromium launcher was unsupported; verification used a standalone Chrome Headless Shell. This is web prototype evidence only.
 - Independent Spec and Standards reviewers reported six documentation/harness/UI findings. Corrected FR18 behavioral cases, provider-aware send guarantees, artifact-policy wording, all-PR guardrail trigger, rendered mobile typography/targets and modal focus handling. Device/TalkBack checks remain pending.
 

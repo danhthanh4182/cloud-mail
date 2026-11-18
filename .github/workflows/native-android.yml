@@ -6,8 +6,6 @@ on:
       - 'mail-worker/**'
       - 'specs/001-native-mail/**'
       - '.github/workflows/native-android.yml'
-  push:
-    branches: ['codex/native-implementation']
   workflow_dispatch:
 permissions:
   contents: read
@@ -56,6 +54,10 @@ jobs:
           cp apps/mobile/build/app/outputs/flutter-apk/app-debug.apk native-artifact/cloud-mail-native-debug.apk
           APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$APK_SIGNER" verify --verbose --print-certs native-artifact/cloud-mail-native-debug.apk > native-artifact/signature.txt
+          APK_AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          "$APK_AAPT" dump badging native-artifact/cloud-mail-native-debug.apk > native-artifact/manifest.txt
+          grep -F "package: name='dev.danhthanh.cloudmail.nativeapp'" native-artifact/manifest.txt
+          grep -F "sdkVersion:'26'" native-artifact/manifest.txt
           cp -r apps/mobile/build/native-previews native-artifact/
           sha256sum native-artifact/cloud-mail-native-debug.apk > native-artifact/SHA256SUMS
           printf 'source=%s\nkind=test-signed debug APK\napplicationId=dev.danhthanh.cloudmail.nativeapp\nbackend=mobile routes and D1 migration required for organization/safe send\n' "$GITHUB_SHA" > native-artifact/BUILD-INFO.txt
