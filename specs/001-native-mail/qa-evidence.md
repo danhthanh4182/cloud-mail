@@ -41,6 +41,8 @@ Coverage numbers and performance measurements are published only from actual run
 
 The previous results above describe the 0.2.0 milestone. The current result is tracked against the Android 0.3 PR revision.
 
+Local verification on 2026-11-19 used Flutter 3.50.0. Analysis found no issues. 33 Flutter tests, 96 Worker unit tests, four Worker runtime tests and five harness tests passed. Android APK compilation and signature/manifest verification are recorded by the PR workflow.
+
 | Case | Automated evidence | Remaining live or device evidence |
 |---|---|---|
 | AC19 | Worker tests traverse References and In-Reply-To. They exclude identical subjects with no header link and other users and addresses. | Expand a long conversation on Android and check accessibility focus. |

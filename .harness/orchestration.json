@@ -96,7 +96,7 @@
         "T008"
       ],
       "approval_required": true,
-      "status": "todo"
+      "status": "in_progress"
     },
     {
       "id": "T010",
@@ -106,7 +106,7 @@
         "T008"
       ],
       "approval_required": true,
-      "status": "todo"
+      "status": "in_progress"
     },
     {
       "id": "T011",
@@ -117,7 +117,7 @@
         "T009"
       ],
       "approval_required": true,
-      "status": "todo"
+      "status": "in_progress"
     },
     {
       "id": "T012",
@@ -135,7 +135,7 @@
         "T011"
       ],
       "approval_required": true,
-      "status": "todo"
+      "status": "in_progress"
     }
   ]
 }

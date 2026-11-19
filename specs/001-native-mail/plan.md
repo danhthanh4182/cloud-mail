@@ -4,20 +4,20 @@
 **Status:** Approved for implementation on 2026-11-19. Execution/evidence: `docs/implementation-ledger.md`.
 
 **Goal:** Native Android email application satisfying US01–US08, with honest milestones and Actions-only binaries.
-**Architecture:** Flutter presentation and Material 3 design system; feature modules expose repository interfaces to typed legacy/mobile API adapters. A sync coordinator owns encrypted cache and optimistic mutations. Worker extensions preserve web/Telegram APIs and add capabilities, owned state, AI jobs and push.
-**Stack:** Flutter stable/Dart with committed SDK pin and lockfile, Material 3, repository/state-management module, HTTPS client, encrypted database + platform keystore. Exact dependency versions are selected and vulnerability/license checked at T002; no fictitious version pins in this plan.
+**Architecture:** Flutter presentation and Material 3 design system; feature modules expose repository interfaces to typed legacy/mobile API adapters. Identity-scoped secure storage holds bounded snapshots, draft replicas and queued reversible mutations. Worker extensions preserve web/Telegram APIs and add capabilities, owned state, AI jobs and push.
+**Stack:** Flutter stable/Dart with committed SDK pin and lockfile, Material 3, repository/state-management module, HTTPS client, platform-backed encrypted storage and Worker/D1. Exact dependency versions are selected and vulnerability/license checked at T002; no fictitious version pins in this plan.
 
 ## Global constraints
 Android API floor selected after resolving plugin minimums, target current supported SDK verified from official SDK at implementation. Proposed minimum Android 8/API26, target at least API35. No app WebView. No build output/signing keys in Git. No production data required for tests. VI/EN, light/dark, text scaling 200%, 48dp touch minimum. Preserve baseline code=200 envelope, raw Authorization and unread convention.
 
 ## Modules
-- `apps/mobile/lib/app/`: routing, capability-aware navigation, session scope, localization.
+- `apps/mobile/lib/app.dart` and `app_controller.dart`: routing, capability-aware navigation, session scope and localization.
 - `apps/mobile/lib/design_system/`: semantic tokens, typography, Material theme extensions and shared components.
 - `apps/mobile/lib/features/{session,mailbox,reader,compose,organization,assistant,settings}/`: domain/models, repository interface, presentation.
-- `apps/mobile/lib/sync/`: cursor sync, conflicts, encrypted cache and mutation queue.
+- `apps/mobile/lib/draft_sync.dart`, `offline_edits.dart`, and `push_session.dart`: draft revisions, mailbox replay and Android registrations.
 - `mail-worker/src/api/mobile-api.js`, `service/mobile/`: additive API/capability/ownership boundary.
 - `mail-worker/migrations/`: additive D1 state/sync/send/push schema.
-- `apps/mobile/test/`, `integration_test/`; backend Vitest suites; `specs/001-native-mail/contracts/fixtures/` for shared contract fixtures.
+- `apps/mobile/test/`, controlled Android QA; backend Vitest suites; `specs/001-native-mail/contracts/fixtures/` for shared contract fixtures.
 
 ## Review focus
 1. Session changes during in-flight calls must not cross identity boundaries. Test repository/session invalidation.
@@ -44,4 +44,4 @@ Domain: OTP candidate selection, recipient parser, reply/thread relation, draft 
 `flutter analyze`; `flutter test`; `flutter test integration_test --device-id <controlled-emulator>`; `npm --prefix mail-worker test` or repository's verified scripts; `flutter build apk --debug` for test artifact; `flutter build appbundle --release` only with configured release signing. Record exact actual commands/versions and results in release evidence.
 
 ## Constitution check
-Requirement traceability and status are present; new API is separated from existing; artifacts remain external; privacy/integrity/a11y risks have tasks. Pending release gates: Flutter/backend tests; credentials/config for live push; representative-device evidence; production signing. Do not turn pending gates into green checkmarks.
+Requirement traceability and status are present; new API is separated from existing; artifacts remain external; privacy/integrity/a11y risks have tasks. Pending release gates include staging provider/FCM results, representative-device evidence and production signing. Do not turn pending gates into green checkmarks.

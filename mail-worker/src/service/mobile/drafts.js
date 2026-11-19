@@ -4,6 +4,20 @@ function validateId(id) {
  if (!/^[\w-]{1,100}$/.test(id)) throw new BizError('Invalid draft ID',400);
 }
 
+function replicaPayload(id,payload) {
+ const clean = {
+  id,accountId:payload.accountId,
+  attachmentCount:Number.isInteger(payload.attachmentCount)?Math.min(10,Math.max(0,payload.attachmentCount)):
+   Array.isArray(payload.attachments)?Math.min(10,payload.attachments.length):0,
+  replyId:Number.isSafeInteger(payload.replyId)?payload.replyId:0,
+  sendType:['reply','forward'].includes(payload.sendType)?payload.sendType:'',
+ };
+ for (const name of ['to','cc','bcc','subject','body']) {
+  clean[name]=typeof payload[name]==='string'?payload[name]:'';
+ }
+ return clean;
+}
+
 export async function getDrafts(db,userId,cursor='') {
  if (cursor) validateId(cursor);
  const {results} = await db.prepare(`
@@ -14,7 +28,7 @@ export async function getDrafts(db,userId,cursor='') {
  `).bind(userId,cursor,userId,cursor).all();
  const list=results.slice(0,100).map(row=>({
   draftId:row.draft_id,revision:row.revision,deleted:row.deleted===1,
-  payload:row.payload ? JSON.parse(row.payload) : null,
+  payload:row.payload ? replicaPayload(row.draft_id,JSON.parse(row.payload)) : null,
  }));
  return {list,nextCursor:results.length>100 ? list.at(-1).draftId : null};
 }
@@ -24,15 +38,7 @@ export async function putDraft(db,userId,id,body) {
  const {revision,payload}=body ?? {};
  if (!Number.isSafeInteger(revision) || revision<0 || !payload || payload.id!==id ||
      !Number.isSafeInteger(payload.accountId)) throw new BizError('Invalid draft',400);
- const clean = {
-  id,accountId:payload.accountId,
-  attachmentCount:Number.isInteger(payload.attachmentCount)?Math.min(10,Math.max(0,payload.attachmentCount)):0,
-  replyId:Number.isSafeInteger(payload.replyId)?payload.replyId:0,
-  sendType:['reply','forward'].includes(payload.sendType)?payload.sendType:'',
- };
- for (const name of ['to','cc','bcc','subject','body']) {
-  clean[name]=typeof payload[name]==='string'?payload[name]:'';
- }
+ const clean=replicaPayload(id,payload);
  const json=JSON.stringify(clean);
  if (new TextEncoder().encode(json).length>400000) throw new BizError('Draft text exceeds sync limit',413);
  const account=await db.prepare('SELECT 1 FROM account WHERE account_id=? AND user_id=? AND is_del=0')

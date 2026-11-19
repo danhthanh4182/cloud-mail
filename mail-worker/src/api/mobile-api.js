@@ -177,13 +177,18 @@ app.get('/mobile/send/:key',async c=>{await requireReady(c);const row=await c.en
 app.get('/mobile/drafts',async c=>{await requireReady(c);const rows=(await c.env.db.prepare('SELECT draft_id,account_id,revision,payload,updated_at FROM mobile_draft WHERE user_id=? ORDER BY updated_at DESC LIMIT 100').bind(owner(c)).all()).results;return c.json(result.ok(rows.map(row=>({...camel(row),payload:JSON.parse(row.payload)}))));});
 app.put('/mobile/drafts/:id',async c=>{
  await requireReady(c);const body=await c.req.json();const payload=body.payload;
+ if(await completed(c)) {
+  return c.json(result.ok(await putDraft(c.env.db,owner(c),c.req.param('id'),{
+   ...body,payload:payload && {...payload,id:c.req.param('id')},
+  })));
+ }
  if(!payload||JSON.stringify(payload).length>500000||!Number.isSafeInteger(body.revision))throw new BizError('Invalid or oversized draft',400);
  const account=await c.env.db.prepare('SELECT account_id FROM account WHERE account_id=? AND user_id=? AND is_del=0').bind(payload.accountId,owner(c)).first();if(!account)throw new BizError('Sender not found',404);
  const id=c.req.param('id');if(!/^[\w-]{1,100}$/.test(id))throw new BizError('Invalid draft ID',400);
  await c.env.db.prepare("INSERT OR IGNORE INTO mobile_draft(user_id,draft_id,account_id,payload,revision) VALUES(?,?,?,'{}',0)").bind(owner(c),id,payload.accountId).run();
  const updated=await c.env.db.prepare('UPDATE mobile_draft SET payload=?,account_id=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND draft_id=? AND revision=?').bind(JSON.stringify(payload),payload.accountId,owner(c),id,body.revision).run();if(!updated.meta.changes)throw new BizError('Draft conflict; preserve your local copy',409);return c.json(result.ok({draftId:id,revision:body.revision+1}));
 });
-app.delete('/mobile/drafts/:id',async c=>{await requireReady(c);const revision=Number(c.req.query('revision'));if(!Number.isSafeInteger(revision))throw new BizError('Draft revision required',400);const deleted=await c.env.db.prepare('DELETE FROM mobile_draft WHERE user_id=? AND draft_id=? AND revision=?').bind(owner(c),c.req.param('id'),revision).run();if(!deleted.meta.changes)throw new BizError('Draft changed; refresh first',409);return c.json(result.ok());});
+app.delete('/mobile/drafts/:id',async c=>{await requireReady(c);const revision=Number(c.req.query('revision'));if(await completed(c)){await deleteDraft(c.env.db,owner(c),c.req.param('id'),revision);return c.json(result.ok());}if(!Number.isSafeInteger(revision))throw new BizError('Draft revision required',400);const deleted=await c.env.db.prepare('DELETE FROM mobile_draft WHERE user_id=? AND draft_id=? AND revision=?').bind(owner(c),c.req.param('id'),revision).run();if(!deleted.meta.changes)throw new BizError('Draft changed; refresh first',409);return c.json(result.ok());});
 app.post('/mobile/assistant/:id',async c=>{
  await requireCompleted(c);
  if(!c.env.ai)throw new BizError('Workers AI is not configured',503);

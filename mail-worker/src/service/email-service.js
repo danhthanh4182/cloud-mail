@@ -1,3 +1,4 @@
+import {scheduleIncomingPush} from './mobile/push';
 import orm from '../entity/orm';
 import email from '../entity/email';
 import { emailListColumns, emailBriefColumns, EMAIL_LIST_TEXT_LEN } from '../lib/email-list-columns';
@@ -1072,6 +1073,13 @@ const emailService = {
 		}
 
 		await orm(c).update(email).set({ status, message: message }).where(eq(email.emailId, sendEmailData.emailId)).run();
+
+		if (c.env.MOBILE_FCM_SERVICE_ACCOUNT) {
+			// In-process callers may omit an execution context, unlike Worker requests.
+			let executionContext;
+			try { executionContext=c.executionCtx; } catch {}
+			scheduleIncomingPush(c.env,executionContext,emailRowList);
+		}
 
 		return emailRowList;
 	},

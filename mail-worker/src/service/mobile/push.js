@@ -140,3 +140,16 @@ export async function notifyIncomingMail(env,userId,emailId,fetcher=fetch) {
   }
  }));
 }
+
+
+// Push is ancillary to a committed delivery and must not delay or fail mail ingestion.
+export function scheduleIncomingPush(env,context,rows) {
+ if (!env.MOBILE_FCM_SERVICE_ACCOUNT || !context?.waitUntil) return;
+ const recipients=rows.filter(row=>row.userId && row.emailId);
+ if (!recipients.length) return;
+ context.waitUntil(Promise.allSettled(recipients.map(row=>
+  notifyIncomingMail(env,row.userId,row.emailId)
+  )).then(results=>{
+   if (results.some(result=>result.status==='rejected')) console.warn('Cloud Mail push dispatch unavailable');
+  }));
+}
