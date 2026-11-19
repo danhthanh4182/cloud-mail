@@ -1,4 +1,5 @@
 import PostalMime from 'postal-mime';
+import {notifyIncomingMail} from '../service/mobile/push';
 import emailService from '../service/email-service';
 import accountService from '../service/account-service';
 import settingService from '../service/setting-service';
@@ -156,6 +157,12 @@ export async function email(message, env, ctx) {
 		}
 
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
+
+		if (account && env.MOBILE_FCM_SERVICE_ACCOUNT && ctx?.waitUntil) {
+			ctx.waitUntil(notifyIncomingMail(env, account.userId, emailRow.emailId).catch(() => {
+				console.warn('Cloud Mail push dispatch unavailable');
+			}));
+		}
 
 
 		if (ruleType === settingConst.ruleType.RULE) {

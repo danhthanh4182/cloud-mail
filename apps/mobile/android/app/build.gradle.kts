@@ -15,6 +15,18 @@ android {
     }
 
     defaultConfig {
+        val firebaseResources = mapOf(
+            "APP_ID" to "google_app_id",
+            "API_KEY" to "google_api_key",
+            "PROJECT_ID" to "project_id",
+            "SENDER_ID" to "gcm_defaultSenderId",
+        ).mapValues { (key, name) -> name to System.getenv("CLOUD_MAIL_FCM_$key").orEmpty() }
+        if (firebaseResources.values.all { (_, value) -> value.isNotBlank() }) {
+            firebaseResources.values.forEach { (name, value) -> resValue("string", name, value) }
+        }
+        listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID").forEach { key ->
+            resValue("string", "cloud_mail_fcm_${key.lowercase()}", System.getenv("CLOUD_MAIL_FCM_$key") ?: "")
+        }
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "dev.danhthanh.cloudmail.nativeapp"
         // You can update the following values to match your application needs.
@@ -29,14 +41,24 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            // Production signing must be configured explicitly in CI.
-            signingConfig = null
+    val releaseStore = System.getenv("CLOUD_MAIL_SIGNING_STORE")
+    if (releaseStore != null) {
+        signingConfigs.create("cloudMailRelease") {
+            storeFile = file(releaseStore)
+            storePassword = System.getenv("CLOUD_MAIL_SIGNING_STORE_PASSWORD")
+            keyAlias = System.getenv("CLOUD_MAIL_SIGNING_KEY_ALIAS")
+            keyPassword = System.getenv("CLOUD_MAIL_SIGNING_KEY_PASSWORD")
         }
     }
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("cloudMailRelease")
+        }
+    }
+}
+
+dependencies {
+    implementation("com.google.firebase:firebase-messaging:25.0.1")
 }
 
 kotlin {

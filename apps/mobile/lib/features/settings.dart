@@ -241,22 +241,42 @@ class SettingsScreen extends StatelessWidget {
             });
           },
         ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.notifications_off_outlined),
-          title: Text(
-            s.t(
-              'Thông báo đẩy chưa cấu hình',
-              'Push notifications not configured',
+        if (s.pushConfigured)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.notifications_outlined),
+            title: Text(s.t('Thông báo thư mới', 'New mail notifications')),
+            subtitle: Text(
+              s.pushStatus.isNotEmpty
+                  ? s.pushStatus
+                  : s.t(
+                      'Thông báo chỉ hiện rằng có thư mới.',
+                      'Notifications show only that new mail arrived.',
+                    ),
+            ),
+            value: s.pushDevice != null,
+            onChanged: s.pushBusy
+                ? null
+                : (value) =>
+                      action(context, value ? s.enablePush : s.disablePush),
+          )
+        else
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.notifications_off_outlined),
+            title: Text(
+              s.t(
+                'Thông báo đẩy chưa cấu hình',
+                'Push notifications not configured',
+              ),
+            ),
+            subtitle: Text(
+              s.t(
+                'Cần cấu hình Firebase trên app và Worker.',
+                'Firebase is required in the app build and Worker.',
+              ),
             ),
           ),
-          subtitle: Text(
-            s.t(
-              'Hộp thư tự làm mới khi ứng dụng đang mở. Cần cấu hình FCM để nhận khi đóng app.',
-              'Mail refreshes while the app is open. FCM configuration is required for delivery while closed.',
-            ),
-          ),
-        ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.verified_user_outlined),
@@ -289,7 +309,7 @@ class SettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          'Cloud Mail Native · 0.2.0\n${s.t('Bản kiểm thử · chức năng mới cần Worker tương thích', 'Test build · new features require a compatible Worker')}',
+          'Cloud Mail Native\n${s.t('Bản kiểm thử · chức năng mới cần Worker tương thích', 'Test build · new features require a compatible Worker')}',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),

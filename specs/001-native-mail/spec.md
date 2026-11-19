@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-native-mail`  
 **Created**: 2026-11-18  
-**Status**: Approved for implementation by user on 2026-11-19. Native daily-client milestone in progress; complete-release acceptance remains pending.
+**Status**: Approved for implementation by user on 2026-11-19. Android completion implementation is tracked in PR #9. Final device, live provider and release-signing acceptance is tracked separately.
 **Input**: Người dùng yêu cầu APK hoàn chỉnh, đẹp, có design system và trải nghiệm thông minh như Gmail; không chấp nhận ứng dụng chỉ bọc WebView. Áp dụng Spec Kit, Superpowers, Ask Matt và SDLC. Không commit file build vào Git.
 
 ## Intent and proposed product boundary
@@ -70,6 +70,10 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 2. Theme theo hệ thống hoặc chọn tay; ngôn ngữ lưu theo thiết bị; mọi thao tác icon có nhãn accessibility.
 3. Hộp thư dễ quét: tên người gửi, tiêu đề, preview, thời gian, unread, sao; OTP nổi bật nhưng không chiếm hết danh sách.
 4. Giao diện không dùng màu đơn độc để phân biệt trạng thái; animation tôn trọng giảm chuyển động.
+
+## Remaining Android scope
+
+[Android completion and acceptance](completion-acceptance.md) defines AC19–AC27 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility and release evidence. These cases supplement US01–US08.
 
 ## Functional Requirements
 

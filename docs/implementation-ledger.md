@@ -30,3 +30,9 @@ Verification after fixes: Flutter analyze clean; 26 Flutter tests pass including
 Native previews render real Flutter widgets with fictional fixtures, not an installed-device screenshot. APK/device behavior still requires acceptance. CI first build completed its APK/signature/upload steps; the corrected commit will rebuild before distribution.
 
 Final verification expansion: native widget journey login→read→reply→explicit confirmation→send passes with an isolated API fixture. The fixture asserts no send before confirmation, exactly one request carrying a stable key, correct reply reference/recipient, and durable draft removal after acceptance. This is not a live-provider or installed-device test. Actual Cloudflare D1 runtime now verifies atomic version/read/folder updates, stale-version rejection, cross-user denial, event count, and repeatable migration. Final totals: 27 Flutter tests, 91 Worker unit tests, 3 Worker runtime tests. APK workflow is PR/manual only to avoid duplicate branch-push and PR builds.
+
+## Android 0.3 completion pass
+
+See [AC19–AC27](../specs/001-native-mail/completion-acceptance.md) and the ordered `002_mobile_completion.sql` migration. Implemented mailbox-scoped threaded reader, native HTML tables and opt-in images, transferable owned attachments, versioned text-draft replication, persistent offline state edits, sender rules and assistant, and opt-in Firebase through an Android registration renewal job. The separate release-candidate workflow requires a configured certificate.
+
+Independent review identified clean replica duplicates, deletion during draft upload, table image consent, HTML-only content search, last-sync persistence, inline conversation loads and background FCM token lifecycle. Fixes and evidence are linked through the completion matrix. Cloud production migration and use of a real device/provider remain pending.

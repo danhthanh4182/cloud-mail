@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_controller.dart';
 import '../domain/mail.dart';
+import '../domain/smart_mail.dart';
 import '../design_system/components.dart';
 import 'compose.dart';
 import 'reader.dart';
@@ -26,7 +27,39 @@ class _MailboxScreenState extends State<MailboxScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startPoll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (s.capabilities.push) {
+        pushChannel.setMethodCallHandler((call) async {
+          if (call.method == 'mail') await openNotification();
+        });
+        unawaited(checkNotifications());
+      }
+    });
   }
+
+  Future<void> checkNotifications() async {
+    await s.refreshPush();
+    if (mounted) await openNotification();
+  }
+
+  Future<void> openNotification() async {
+    if (!mounted || !s.signedIn) return;
+    final mail = await action(context, s.takeNotification);
+    if (mounted && mail != null) {
+      final opened = await action(context, () => s.open(mail));
+      if (mounted && opened != null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ReaderScreen(state: s, mail: opened),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> refresh() =>
+      s.folder == 'drafts' ? s.syncDrafts() : s.loadMessages();
 
   void _startPoll() {
     poll?.cancel();
@@ -35,7 +68,7 @@ class _MailboxScreenState extends State<MailboxScreen>
           ModalRoute.of(context)?.isCurrent == true &&
           !s.loading &&
           s.query.isEmpty) {
-        s.loadMessages();
+        unawaited(refresh());
       }
     });
   }
@@ -44,7 +77,8 @@ class _MailboxScreenState extends State<MailboxScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _startPoll();
-      s.loadMessages();
+      if (ModalRoute.of(context)?.isCurrent == true) unawaited(refresh());
+      if (s.capabilities.push) unawaited(checkNotifications());
     } else {
       poll?.cancel();
     }
@@ -55,6 +89,7 @@ class _MailboxScreenState extends State<MailboxScreen>
     WidgetsBinding.instance.removeObserver(this);
     poll?.cancel();
     debounce?.cancel();
+    pushChannel.setMethodCallHandler(null);
     search.dispose();
     super.dispose();
   }
@@ -94,6 +129,127 @@ class _MailboxScreenState extends State<MailboxScreen>
       ),
     );
   }
+
+  Future<void> smartSearch() async {
+    var query = '';
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.t('Tìm bằng câu tự nhiên', 'Natural-language search')),
+        content: TextField(
+          autofocus: true,
+          maxLength: 200,
+          onChanged: (value) => query = value,
+          decoration: InputDecoration(
+            hintText: s.t(
+              'Thư từ ten@example.com hôm qua',
+              'Mail from name@example.com yesterday',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(s.t('Hủy', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, query),
+            child: Text(s.t('Xem bộ lọc', 'Preview filters')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || text == null || text.trim().isEmpty) return;
+    final filters = interpretMailSearch(text);
+    var field = filters['field']!;
+    var term = filters['text']!;
+    var from = filters['startDate']!;
+    var to = filters['endDate']!;
+    final apply = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.t('Xác nhận bộ lọc', 'Review search filters')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: field,
+                items: [
+                  for (final entry in searchFields.entries)
+                    DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: (value) => field = value ?? field,
+              ),
+              TextFormField(
+                initialValue: term,
+                onChanged: (value) => term = value,
+                decoration: InputDecoration(
+                  labelText: s.t('Từ khóa hoặc địa chỉ', 'Keyword or address'),
+                ),
+              ),
+              TextFormField(
+                initialValue: from,
+                onChanged: (value) => from = value,
+                decoration: InputDecoration(
+                  labelText: s.t(
+                    'Từ ngày UTC (YYYY-MM-DD)',
+                    'From UTC date (YYYY-MM-DD)',
+                  ),
+                ),
+              ),
+              TextFormField(
+                initialValue: to,
+                onChanged: (value) => to = value,
+                decoration: InputDecoration(
+                  labelText: s.t(
+                    'Đến ngày UTC (YYYY-MM-DD)',
+                    'To UTC date (YYYY-MM-DD)',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.t('Hủy', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.t('Tìm thư', 'Search')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || apply != true) return;
+    final valid = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    if ([from, to].any(
+      (d) =>
+          d.isNotEmpty && (!valid.hasMatch(d) || DateTime.tryParse(d) == null),
+    )) {
+      showNotice(context, s.t('Ngày không hợp lệ.', 'Invalid date.'));
+      return;
+    }
+    debounce?.cancel();
+    search.text = term;
+    s.query = term;
+    s.searchType = field;
+    s.startDate = from;
+    s.endDate = to;
+    await s.loadMessages();
+  }
+
+  Map<String, String> get searchFields => {
+    'subject': s.t('Tiêu đề', 'Subject'),
+    'content': s.t('Nội dung', 'Body'),
+    'senderAddress': s.t('Người gửi', 'Sender'),
+    'recipientAddress': s.t('Người nhận', 'Recipient'),
+  };
 
   Future<void> filters() async {
     await showModalBottomSheet<void>(
@@ -213,10 +369,20 @@ class _MailboxScreenState extends State<MailboxScreen>
         appBar: AppBar(
           title: Text(title(s.folder)),
           actions: [
+            if (s.capabilities.smartMail &&
+                !['settings', 'drafts'].contains(s.folder))
+              IconButton(
+                tooltip: s.t(
+                  'Tìm bằng câu tự nhiên',
+                  'Natural-language search',
+                ),
+                icon: const Icon(Icons.auto_awesome_outlined),
+                onPressed: smartSearch,
+              ),
             if (s.folder != 'settings')
               IconButton(
                 tooltip: s.t('Làm mới', 'Refresh'),
-                onPressed: s.loading ? null : () => s.loadMessages(),
+                onPressed: s.loading || s.draftsSyncing ? null : refresh,
                 icon: const Icon(Icons.refresh),
               ),
           ],
@@ -242,7 +408,7 @@ class _MailboxScreenState extends State<MailboxScreen>
                     s.selectAddress(null);
                   },
                 ),
-                for (final a in s.addresses)
+                for (final a in s.legacyStarred ? <MailAddress>[] : s.addresses)
                   ListTile(
                     leading: Avatar(
                       a.name.isEmpty ? a.email : a.name,
@@ -307,7 +473,17 @@ class _MailboxScreenState extends State<MailboxScreen>
                         if (s.offline) ConnectionBanner(s),
                         if (s.loading)
                           const LinearProgressIndicator(minHeight: 2),
-                        if (s.folder != 'drafts')
+                        if (s.legacyStarred)
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              s.t(
+                                'Máy chủ cũ hiển thị thư có sao của tất cả địa chỉ và chưa lọc được.',
+                                'The older server lists starred mail across all addresses without filters.',
+                              ),
+                            ),
+                          ),
+                        if (s.folder != 'drafts' && !s.legacyStarred)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                             child: TextField(
@@ -337,7 +513,8 @@ class _MailboxScreenState extends State<MailboxScreen>
                               ),
                             ),
                           ),
-                        if (s.startDate.isNotEmpty)
+                        if (!s.legacyStarred &&
+                            (s.startDate.isNotEmpty || s.endDate.isNotEmpty))
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Align(
@@ -350,6 +527,93 @@ class _MailboxScreenState extends State<MailboxScreen>
                                   s.loadMessages();
                                 },
                               ),
+                            ),
+                          ),
+                        if (!s.legacyStarred &&
+                            s.folder != 'drafts' &&
+                            s.query.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                s.t(
+                                  '${searchFields[s.searchType]} · ${s.messages.length} thư đã tải',
+                                  '${searchFields[s.searchType]} · ${s.messages.length} loaded',
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (s.folder == 'drafts' && s.capabilities.draftSync)
+                          ListTile(
+                            leading: const Icon(Icons.sync),
+                            title: Text(
+                              s.draftsSyncing
+                                  ? s.t('Đang đồng bộ nháp', 'Syncing drafts')
+                                  : s.t('Đồng bộ bản nháp', 'Sync drafts'),
+                            ),
+                            subtitle: Text(
+                              s.draftSyncStatus.isNotEmpty
+                                  ? s.draftSyncStatus
+                                  : s.t(
+                                      'Đồng bộ văn bản, tệp gốc giữ trên máy.',
+                                      'Text syncs. Original attachments stay on the device.',
+                                    ),
+                            ),
+                            onTap: s.draftsSyncing ? null : s.syncDrafts,
+                          ),
+                        if (s.pendingEdits.isNotEmpty)
+                          ListTile(
+                            leading: const Icon(Icons.cloud_off_outlined),
+                            title: Text(
+                              s.t(
+                                '${s.pendingEdits.length} thay đổi đang giữ trên máy',
+                                '${s.pendingEdits.length} pending changes',
+                              ),
+                            ),
+                            subtitle: Text(
+                              s.pendingEdits.any((edit) => edit.conflict)
+                                  ? s.t(
+                                      'Có xung đột. Bỏ các thay đổi chờ rồi mở lại thư để chỉnh trên bản mới.',
+                                      'Conflict. Discard pending changes and reopen the latest version to edit.',
+                                    )
+                                  : s.t(
+                                      'App sẽ đồng bộ khi kết nối lại.',
+                                      'Changes sync when the app reconnects.',
+                                    ),
+                            ),
+                            trailing: IconButton(
+                              tooltip: s.t(
+                                'Bỏ thay đổi đang chờ',
+                                'Discard pending changes',
+                              ),
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: s.editsSyncing
+                                  ? null
+                                  : () async {
+                                      if (await confirm(
+                                            context,
+                                            s,
+                                            s.t(
+                                              'Bỏ thay đổi đang chờ?',
+                                              'Discard pending changes?',
+                                            ),
+                                            s.t(
+                                              'App sẽ hiển thị trạng thái mới nhất từ máy chủ.',
+                                              'The server version will be shown.',
+                                            ),
+                                          ) &&
+                                          context.mounted) {
+                                        await action(context, s.discardEdits);
+                                      }
+                                    },
+                            ),
+                          ),
+                        if (s.offline && s.lastServerSync != null)
+                          Text(
+                            s.t(
+                              'Đồng bộ gần nhất ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(s.lastServerSync!))}',
+                              'Last synced ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(s.lastServerSync!))}',
                             ),
                           ),
                         if (s.error.isNotEmpty && !s.offline)
@@ -414,36 +678,47 @@ class _MailboxScreenState extends State<MailboxScreen>
                     : d.subject,
               ),
               subtitle: Text(
-                '${d.to}\n${d.outcomeUncertain ? s.t('Cần đối chiếu trạng thái gửi', 'Send status needs reconciliation') : d.body}',
+                '${d.to}\n${d.conflictCopy
+                    ? s.t('Bản giữ lại do xung đột', 'Saved conflict copy')
+                    : d.outcomeUncertain
+                    ? s.t('Cần đối chiếu trạng thái gửi', 'Send status needs reconciliation')
+                    : d.body}',
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
               isThreeLine: true,
-              onTap: () => compose(d),
+              onTap: s.draftsSyncing ? null : () => compose(d),
               trailing: IconButton(
                 tooltip: s.t('Xóa nháp', 'Delete draft'),
                 icon: const Icon(Icons.delete_outline),
-                onPressed: () async {
-                  if (await confirm(
-                    context,
-                    s,
-                    s.t('Xóa bản nháp?', 'Delete draft?'),
-                    s.t(
-                      'Nội dung chưa gửi sẽ bị xóa khỏi thiết bị.',
-                      'Unsent content will be removed from this device.',
-                    ),
-                  )) {
-                    if (context.mounted) {
-                      await action(context, () => s.deleteDraft(d));
-                    }
-                  }
-                },
+                onPressed: s.draftsSyncing
+                    ? null
+                    : () async {
+                        if (await confirm(
+                          context,
+                          s,
+                          s.t('Xóa bản nháp?', 'Delete draft?'),
+                          d.revision > 0
+                              ? s.t(
+                                  'Nháp đã đồng bộ sẽ bị xóa trên máy chủ và các thiết bị sau lần đồng bộ tiếp theo.',
+                                  'This synced draft will be removed from the server and other devices on the next sync.',
+                                )
+                              : s.t(
+                                  'Nội dung chưa gửi sẽ bị xóa khỏi thiết bị.',
+                                  'Unsent content will be removed from this device.',
+                                ),
+                        )) {
+                          if (context.mounted) {
+                            await action(context, () => s.deleteDraft(d));
+                          }
+                        }
+                      },
               ),
             );
           },
         );
   Widget _mail() {
-    if (s.messages.isEmpty && !s.loading) {
+    if (s.messages.isEmpty && !s.loading && !s.hasMore) {
       return EmptyPanel(
         icon: Icons.inbox_outlined,
         title: s.query.isNotEmpty
@@ -531,6 +806,13 @@ class _MailboxScreenState extends State<MailboxScreen>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (s.capabilities.smartMail &&
+                        m.category.isNotEmpty &&
+                        m.category != 'primary')
+                      Text(
+                        mailCategories(s)[m.category] ?? m.category,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
                     if (m.code.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),

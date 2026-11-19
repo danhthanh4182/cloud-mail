@@ -1,7 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:html/parser.dart' as html;
+import 'package:html/dom.dart' as dom;
+
+import '../data/api.dart';
+import 'rich_mail.dart';
 
 import '../app_controller.dart';
 import '../domain/mail.dart';
@@ -18,6 +25,11 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   late MailMessage m;
+  late final dom.Element? document;
+  late final Future<({List<MailMessage> list, bool truncated})>? thread;
+  bool showImages = false;
+  Completer<void>? transfer;
+  double? transferProgress;
   bool summarizing = false, downloading = false;
   Map<String, dynamic>? summary;
   AppController get s => widget.state;
@@ -25,9 +37,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void initState() {
     super.initState();
     m = widget.mail;
+    document = m.content.isEmpty ? null : safeMailHtml(m.content);
+    thread = s.capabilities.conversation && !s.offline
+        ? s.conversation(m)
+        : null;
   }
 
-  void reply({bool forward = false}) {
+  @override
+  void dispose() {
+    cancelTransfer();
+    super.dispose();
+  }
+
+  void cancelTransfer() {
+    if (transfer?.isCompleted == false) transfer!.complete();
+  }
+
+  void reply({
+    bool forward = false,
+    String suggestion = '',
+    List<Map<String, dynamic>>? attachments,
+  }) {
     final draft = MailDraft(
       accountId: m.accountId,
       replyId: m.id,
@@ -38,7 +68,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ? m.to
           : m.sender,
       subject: '${forward ? 'Fwd' : 'Re'}: ${m.subject}',
-      body: '\n\n—— ${m.displayName} · ${m.time} ——\n${m.body}',
+      body: '$suggestion\n\n—— ${m.displayName} · ${m.time} ——\n${m.body}',
+      attachments: attachments,
     );
     Navigator.push(
       context,
@@ -102,53 +133,211 @@ class _ReaderScreenState extends State<ReaderScreen> {
     } /* Dialog route owns the controller until its reverse animation finishes. */
   }
 
-  Future<void> download(Map<String, dynamic> file) async {
-    final ctx = context;
-    setState(() => downloading = true);
+  Future<Uint8List> fetchFile(Map<String, dynamic> file) async {
+    if (!s.capabilities.organization) {
+      throw ApiFailure(
+        503,
+        s.t(
+          'Máy chủ cần API tải tệp mới.',
+          'Update the server to download attachments.',
+        ),
+      );
+    }
+    final current = transfer!;
+    final bytes = await s.api!.attachment(
+      asInt(file['attId'] ?? file['att_id']),
+      abort: current.future,
+      progress: (received, total) {
+        if (mounted && current == transfer) {
+          setState(
+            () => transferProgress = total == null || total == 0
+                ? null
+                : received / total,
+          );
+        }
+      },
+    );
+    if (current.isCompleted) throw const ApiFailure(499, 'Download canceled');
+    return bytes;
+  }
+
+  Future<void> runTransfer(Future<void> Function() load) async {
+    if (downloading) return;
+    setState(() {
+      transfer = Completer<void>();
+      downloading = true;
+      transferProgress = null;
+    });
     try {
-      if (!s.capabilities.organization) {
-        throw FormatException(
-          s.t(
-            'Máy chủ cần API tải tệp có kiểm tra quyền sở hữu.',
-            'The server needs the owned attachment API update.',
-          ),
-        );
-      }
-      final bytes = await s.api!.attachment(
-        asInt(file['attId'] ?? file['att_id']),
-      );
-      if (!ctx.mounted) return;
-      await FilePicker.saveFile(
-        dialogTitle: s.t('Lưu tệp đính kèm', 'Save attachment'),
-        fileName: asText(file['filename']).replaceAll(RegExp(r'[/\\]'), '_'),
-        bytes: bytes,
-      );
-      if (ctx.mounted) {
-        showNotice(
-          ctx,
-          s.t('Đã hoàn tất hộp thoại lưu tệp', 'Save dialog completed'),
-        );
-      }
+      await load();
+    } on ApiFailure catch (e) {
+      if (e.code != 499 && mounted) showNotice(context, e.message);
     } catch (e) {
-      if (ctx.mounted) showNotice(ctx, e.toString());
+      if (mounted) showNotice(context, e.toString());
     } finally {
-      if (ctx.mounted) setState(() => downloading = false);
+      if (mounted) setState(() => downloading = false);
+    }
+  }
+
+  Future<void> download(Map<String, dynamic> file) => runTransfer(() async {
+    final bytes = await fetchFile(file);
+    if (!mounted) return;
+    final destination = await FilePicker.saveFile(
+      dialogTitle: s.t('Lưu tệp đính kèm', 'Save attachment'),
+      fileName: asText(file['filename']).replaceAll(RegExp(r'[/\\]'), '_'),
+      bytes: bytes,
+    );
+    if (destination != null && mounted) {
+      showNotice(context, s.t('Đã lưu tệp', 'File saved'));
+    }
+  });
+
+  Future<void> forward() async {
+    if (m.attachments.isEmpty || !s.capabilities.organization) {
+      reply(forward: true);
+      return;
+    }
+    final checked = <int>{};
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, update) => AlertDialog(
+          title: Text(
+            s.t('Chọn tệp để chuyển tiếp', 'Select original attachments'),
+          ),
+          content: SizedBox(
+            width: 360,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final (index, file) in m.attachments.indexed)
+                  CheckboxListTile(
+                    value: checked.contains(index),
+                    title: Text(asText(file['filename'])),
+                    onChanged: asInt(file['size']) > 5 * 1024 * 1024
+                        ? null
+                        : (value) => update(() {
+                            if (value == true) {
+                              checked.add(index);
+                            } else {
+                              checked.remove(index);
+                            }
+                          }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(s.t('Hủy', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(s.t('Tiếp tục', 'Continue')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || accepted != true) return;
+    await runTransfer(() async {
+      final attachments = <Map<String, dynamic>>[];
+      var total = 0;
+      if (checked.length > 10) {
+        throw const FormatException('Maximum 10 attachments');
+      }
+      for (final index in checked) {
+        final file = m.attachments[index];
+        final data = await fetchFile(file);
+        total += data.length;
+        if (data.length > 5 * 1024 * 1024 || total > 10 * 1024 * 1024) {
+          throw const FormatException('Maximum 5 MB per file and 10 MB total');
+        }
+        attachments.add({
+          'filename': asText(file['filename']),
+          'mimeType': asText(file['contentType']).isEmpty
+              ? 'application/octet-stream'
+              : file['contentType'],
+          'size': data.length,
+          'content': base64Encode(data),
+        });
+      }
+      if (mounted) reply(forward: true, attachments: attachments);
+    });
+  }
+
+  Future<void> suggestReply() async {
+    if (!await confirm(
+      context,
+      s,
+      s.t('Tạo gợi ý trả lời?', 'Generate a reply suggestion?'),
+      s.t(
+        'Gửi nội dung đã rút gọn và che dữ liệu nhạy cảm tới Workers AI.',
+        'Send a shortened, redacted excerpt to Workers AI.',
+      ),
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() => summarizing = true);
+    final draft = await action(context, () => s.suggestReply(m));
+    if (!mounted) return;
+    setState(() => summarizing = false);
+    if (draft != null) reply(suggestion: draft);
+  }
+
+  Future<void> chooseCategory() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(
+          s.t(
+            'Phân loại thư từ người gửi này',
+            'Categorize mail from this sender',
+          ),
+        ),
+        children: [
+          for (final entry in mailCategories(s).entries)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, entry.key),
+              child: Text(entry.value),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: Text(s.t('Xóa quy tắc', 'Remove rule')),
+          ),
+        ],
+      ),
+    );
+    if (selected != null && mounted) {
+      final saved = await action(context, () async {
+        await s.setSenderCategory(m.sender, selected);
+        return true;
+      });
+      if (mounted && saved == true) {
+        showNotice(context, s.t('Đã cập nhật quy tắc', 'Sender rule updated'));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final links = html
-        .parse(m.content)
-        .querySelectorAll('a[href]')
-        .map((a) => a.attributes['href']!)
-        .where((url) {
-          final u = Uri.tryParse(url);
-          return u != null && ['https', 'http', 'mailto'].contains(u.scheme);
-        })
-        .toSet()
-        .take(30);
+    final links =
+        (document?.querySelectorAll('a[href]') ?? const <dom.Element>[])
+            .map((element) => safeMailUrl(element.attributes['href']))
+            .whereType<Uri>()
+            .toSet()
+            .take(30);
+    final hasRemoteImages =
+        document
+            ?.querySelectorAll('img[src]')
+            .any(
+              (element) =>
+                  safeMailUrl(element.attributes['src'], image: true) != null,
+            ) ??
+        false;
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -254,6 +443,75 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 ),
               ],
             ),
+            if (thread != null)
+              FutureBuilder<({List<MailMessage> list, bool truncated})>(
+                future: thread,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Text(
+                      s.t(
+                        'Không tải được hội thoại.',
+                        'Conversation could not be loaded.',
+                      ),
+                    );
+                  }
+                  final related = snapshot.data?.list ?? [];
+                  return related.isEmpty
+                      ? const SizedBox.shrink()
+                      : ExpansionTile(
+                          title: Text(
+                            s.t(
+                              'Hội thoại · ${related.length + 1} thư',
+                              'Conversation · ${related.length + 1} messages',
+                            ),
+                          ),
+                          children: [
+                            for (final item
+                                in ([...related, m]..sort((a, b) {
+                                  final byTime = a.time.compareTo(b.time);
+                                  return byTime == 0
+                                      ? a.id.compareTo(b.id)
+                                      : byTime;
+                                })))
+                              _ConversationItem(
+                                key: ValueKey(item.id),
+                                state: s,
+                                message: item,
+                                current: item.id == m.id,
+                              ),
+                            if (snapshot.data?.truncated == true)
+                              Text(
+                                s.t(
+                                  'Hội thoại còn thư ngoài giới hạn hiển thị.',
+                                  'Older conversation results are limited.',
+                                ),
+                              ),
+                          ],
+                        );
+                },
+              ),
+            if (s.capabilities.smartMail && m.category.isNotEmpty)
+              Text(
+                s.t(
+                  '${mailCategories(s)[m.category]} · ${m.reason == 'senderRule'
+                      ? 'Theo quy tắc người gửi'
+                      : m.reason == 'subject'
+                      ? 'Theo tiêu đề'
+                      : 'Mặc định'}',
+                  '${mailCategories(s)[m.category]} · ${m.reason == 'senderRule'
+                      ? 'Sender rule'
+                      : m.reason == 'subject'
+                      ? 'Based on subject'
+                      : 'Default'}',
+                ),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            if (s.capabilities.smartMail && m.sender.contains('@'))
+              TextButton.icon(
+                onPressed: chooseCategory,
+                icon: const Icon(Icons.label_outline),
+                label: Text(s.t('Phân loại theo người gửi', 'Sender category')),
+              ),
             if (m.labels.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
@@ -336,22 +594,41 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 ),
               ),
             const SizedBox(height: 16),
-            Text(
-              m.body.isEmpty
-                  ? s.t('(Thư không có nội dung văn bản)', '(No text content)')
-                  : m.body,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            if (m.content.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(
+            if (document != null && document!.nodes.isNotEmpty)
+              RichMailBody(document: document!, showImages: showImages)
+            else
+              Text(
+                m.body.isEmpty
+                    ? s.t(
+                        '(Thư không có nội dung văn bản)',
+                        '(No text content)',
+                      )
+                    : m.body,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            if (hasRemoteImages && !showImages)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.image_outlined),
+                label: Text(
                   s.t(
-                    'Ảnh từ xa và mã thực thi đã bị chặn. Nội dung được chuyển thành văn bản an toàn.',
-                    'Remote images and executable content are blocked. Content is rendered as safe text.',
+                    'Tải ảnh HTTPS trong thư này',
+                    'Load HTTPS images for this message',
                   ),
-                  style: TextStyle(fontSize: 12, color: c.onSurfaceVariant),
                 ),
+                onPressed: () async {
+                  if (await confirm(
+                        context,
+                        s,
+                        s.t('Tải ảnh bên ngoài?', 'Load external images?'),
+                        s.t(
+                          'Máy chủ ảnh có thể biết bạn đã mở thư.',
+                          'Image hosts may learn that you opened the message.',
+                        ),
+                      ) &&
+                      mounted) {
+                    setState(() => showImages = true);
+                  }
+                },
               ),
             for (final url in links)
               Padding(
@@ -359,7 +636,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.open_in_new, size: 18),
                   label: Text(
-                    url,
+                    '$url',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -368,17 +645,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       context,
                       s,
                       s.t('Mở liên kết ngoài?', 'Open external link?'),
-                      url,
+                      '$url',
                     )) {
                       await launchUrl(
-                        Uri.parse(url),
+                        url,
                         mode: LaunchMode.externalApplication,
                       );
                     }
                   },
                 ),
               ),
-            if (downloading) const LinearProgressIndicator(),
+            if (downloading) ...[
+              LinearProgressIndicator(value: transferProgress),
+              TextButton(
+                onPressed: cancelTransfer,
+                child: Text(s.t('Hủy tải tệp', 'Cancel transfer')),
+              ),
+            ],
             for (final file in m.attachments)
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -401,8 +684,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   icon: const Icon(Icons.reply),
                   label: Text(s.t('Trả lời', 'Reply')),
                 ),
+                if (s.capabilities.assistant)
+                  OutlinedButton.icon(
+                    onPressed: summarizing ? null : suggestReply,
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: Text(s.t('Gợi ý trả lời', 'Suggest reply')),
+                  ),
                 OutlinedButton.icon(
-                  onPressed: () => reply(forward: true),
+                  onPressed: downloading ? null : forward,
                   icon: const Icon(Icons.forward),
                   label: Text(s.t('Chuyển tiếp', 'Forward')),
                 ),
@@ -412,6 +701,96 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ConversationItem extends StatefulWidget {
+  final AppController state;
+  final MailMessage message;
+  final bool current;
+  const _ConversationItem({
+    super.key,
+    required this.state,
+    required this.message,
+    required this.current,
+  });
+  @override
+  State<_ConversationItem> createState() => _ConversationItemState();
+}
+
+class _ConversationItemState extends State<_ConversationItem> {
+  Future<MailMessage>? mail;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.state;
+    final item = widget.message;
+    if (widget.current) {
+      return ListTile(
+        selected: true,
+        title: Text(item.displayName),
+        subtitle: Text(
+          s.t('Thư đang đọc · ${item.time}', 'Current message · ${item.time}'),
+        ),
+      );
+    }
+    return ExpansionTile(
+      title: Text(item.displayName),
+      subtitle: Text('${item.subject} · ${item.time}'),
+      onExpansionChanged: (open) {
+        if (open && mail == null) setState(() => mail = s.open(item));
+      },
+      children: [
+        if (mail != null)
+          FutureBuilder<MailMessage>(
+            future: mail,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return TextButton(
+                  onPressed: () => setState(() => mail = s.open(item)),
+                  child: Text(s.t('Tải lại thư', 'Retry loading message')),
+                );
+              }
+              final loaded = snapshot.data;
+              if (loaded == null) return const LinearProgressIndicator();
+              final content = loaded.content.isEmpty
+                  ? null
+                  : safeMailHtml(loaded.content);
+              return Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (content != null && content.nodes.isNotEmpty)
+                      RichMailBody(document: content, showImages: false)
+                    else
+                      Text(loaded.body),
+                    if (loaded.code.isNotEmpty)
+                      OtpCard(
+                        state: s,
+                        code: loaded.code,
+                        sender: loaded.displayName,
+                      ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ReaderScreen(state: s, mail: loaded),
+                        ),
+                      ),
+                      child: Text(
+                        s.t(
+                          'Mở thư và tệp đính kèm',
+                          'Open message and attachments',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+      ],
     );
   }
 }

@@ -93,6 +93,8 @@ const premKey = {
 app.use('*', async (c, next) => {
 
 	const path = c.req.path;
+	// Only this operation uses an installation credential. Mail endpoints still require a user JWT.
+	if (path === '/mobile/push/renew' && c.req.method === 'PUT') return await next();
 
 	const index = exclude.findIndex(item => {
 		return matchesPathPrefix(path, item);

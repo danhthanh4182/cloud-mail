@@ -30,14 +30,16 @@ class ApiClient {
     Object? body,
     Map<String, String>? query,
     Map<String, String>? headers,
+    Future<void>? abort,
+    void Function(int received, int? total)? progress,
+    int maxBytes = 18 * 1024 * 1024,
   }) async {
     if (!path.startsWith('/') || path.contains('://')) {
       throw const ApiFailure(400, 'Invalid API path');
     }
-    final request = http.Request(
-      method,
-      origin.replace(path: '/api$path', queryParameters: query),
-    )..followRedirects = false;
+    final uri = origin.replace(path: '/api$path', queryParameters: query);
+    final request = http.AbortableRequest(method, uri, abortTrigger: abort)
+      ..followRedirects = false;
     request.headers.addAll({
       'Accept': 'application/json',
       'accept-language': language,
@@ -52,8 +54,7 @@ class ApiClient {
       final stream = await _client
           .send(request)
           .timeout(const Duration(seconds: 35));
-      if (stream.contentLength != null &&
-          stream.contentLength! > 18 * 1024 * 1024) {
+      if (stream.contentLength != null && stream.contentLength! > maxBytes) {
         throw const ApiFailure(413, 'Response exceeds mobile limit');
       }
       final bytes = BytesBuilder();
@@ -61,9 +62,10 @@ class ApiClient {
         const Duration(seconds: 35),
       )) {
         bytes.add(chunk);
-        if (bytes.length > 18 * 1024 * 1024) {
+        if (bytes.length > maxBytes) {
           throw const ApiFailure(413, 'Response exceeds mobile limit');
         }
+        progress?.call(bytes.length, stream.contentLength);
       }
       return http.Response.bytes(
         bytes.takeBytes(),
@@ -75,6 +77,8 @@ class ApiClient {
         0,
         'Connection timed out. A send may still be processing.',
       );
+    } on http.RequestAbortedException {
+      throw const ApiFailure(499, 'Download canceled');
     } on http.ClientException {
       throw const ApiFailure(0, 'Cannot connect to the mail server.');
     }
@@ -126,8 +130,18 @@ class ApiClient {
     return envelope['data'];
   }
 
-  Future<Uint8List> attachment(int id) async {
-    final r = await _send('GET', '/mobile/attachments/$id');
+  Future<Uint8List> attachment(
+    int id, {
+    Future<void>? abort,
+    void Function(int received, int? total)? progress,
+  }) async {
+    final r = await _send(
+      'GET',
+      '/mobile/attachments/$id',
+      abort: abort,
+      progress: progress,
+      maxBytes: 10 * 1024 * 1024,
+    );
     if (r.statusCode != 200) {
       throw ApiFailure(r.statusCode, 'Cannot download attachment');
     }

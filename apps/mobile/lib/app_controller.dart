@@ -3,10 +3,16 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'data/api.dart';
 import 'data/vault.dart';
 import 'domain/mail.dart';
+import 'domain/mail_sync.dart';
+
+part 'draft_sync.dart';
+part 'offline_edits.dart';
+part 'push_session.dart';
 
 typedef ApiFactory = ApiClient Function(
   Uri origin,
@@ -22,6 +28,15 @@ class AppController extends ChangeNotifier {
   List<MailAddress> addresses = [];
   List<MailMessage> messages = [];
   List<MailDraft> drafts = [];
+  final Map<String, int> draftDeletes = {};
+  List<PendingMailEdit> pendingEdits = [];
+  bool draftsSyncing = false, editsSyncing = false;
+  String draftSyncStatus = '';
+  DateTime? draftLastSync, lastServerSync;
+  bool pushConfigured = false, pushBusy = false;
+  String? pushDevice;
+  String pushStatus = '';
+  bool get legacyStarred => folder == 'star' && !capabilities.organization;
   Capabilities capabilities = const Capabilities();
   bool ready = false,
       busy = false,
@@ -37,7 +52,7 @@ class AppController extends ChangeNotifier {
       language = 'vi',
       theme = 'system';
   int? selectedAddress;
-  int _generation = 0, _loadTicket = 0;
+  int _generation = 0, _loadTicket = 0, _pageCursor = 0;
   bool _disposed = false;
   Future<void> _writes = Future.value();
   AppController(this.vault, {ApiFactory? apiFactory})
@@ -79,16 +94,21 @@ class AppController extends ChangeNotifier {
           language,
         );
         profile = Map<String, dynamic>.from(session['profile']);
+        if (session['capabilities'] is Map) {
+          capabilities = Capabilities.fromJson(
+            Map<String, dynamic>.from(session['capabilities'] as Map),
+          );
+        }
         addresses = decodeList(session['addresses'])
             .map((x) => MailAddress.fromJson(Map<String, dynamic>.from(x)))
             .toList();
         await _restoreDrafts();
+        await _restoreEdits();
         final cached = await vault.read(_cacheKey);
         if (cached != null) {
-          messages = decodeList(jsonDecode(cached))
-              .map((x) => MailMessage.fromJson(Map<String, dynamic>.from(x)))
-              .toList();
+          _restoreMailboxCache(cached);
         }
+        messages = _withEdits(messages);
         offline = true;
         final generation = _generation;
         try {
@@ -168,6 +188,7 @@ class AppController extends ChangeNotifier {
       await _fetchCapabilities();
       _requireGeneration(generation);
       await _restoreDrafts();
+      await _restoreEdits();
       if (generation != _generation) return;
       await _saveSession();
       await loadMessages();
@@ -245,6 +266,7 @@ class AppController extends ChangeNotifier {
         'origin': api!.origin.toString(),
         'token': api!.token,
         'profile': profile,
+        'capabilities': capabilities.toJson(),
         'addresses': addresses.map((a) => a.toJson()).toList(),
       }),
     );
@@ -254,12 +276,47 @@ class AppController extends ChangeNotifier {
     final generation = _generation;
     final saved = await vault.read('drafts:$scope');
     _requireGeneration(generation);
-    drafts = saved == null
-        ? []
-        : decodeList(jsonDecode(saved))
-              .whereType<Map>()
-              .map((x) => MailDraft.fromJson(Map<String, dynamic>.from(x)))
-              .toList();
+    final data = saved == null ? null : jsonDecode(saved);
+    drafts = decodeList(data is Map ? data['items'] : data)
+        .whereType<Map>()
+        .map((x) => MailDraft.fromJson(Map<String, dynamic>.from(x)))
+        .toList();
+    draftDeletes.clear();
+    if (data is Map && data['deletes'] is Map) {
+      for (final entry in (data['deletes'] as Map).entries) {
+        draftDeletes['${entry.key}'] = asInt(entry.value);
+      }
+    }
+  }
+
+  Future<void> _persistDrafts() => _write(
+    'drafts:$scope',
+    jsonEncode({
+      'items': drafts.map((draft) => draft.toJson()).toList(),
+      'deletes': draftDeletes,
+    }),
+  );
+
+  List<MailMessage> _withEdits(List<MailMessage> list) {
+    final edits = {
+      for (final edit in pendingEdits)
+        if (!edit.conflict) edit.emailId: edit,
+    };
+    return list.map((row) => edits[row.id]?.apply(row) ?? row).where((row) {
+      if (folder == 'star') return row.starred;
+      if (folder == 'sent') return row.folder == 'inbox';
+      return row.folder == folder;
+    }).toList();
+  }
+
+  void _restoreMailboxCache(String encoded) {
+    final cache = jsonDecode(encoded);
+    if (cache is Map) {
+      lastServerSync = DateTime.tryParse(asText(cache['syncedAt']));
+    }
+    messages = decodeList(cache is Map ? cache['messages'] : cache)
+        .map((row) => MailMessage.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   String get _cacheKey =>
@@ -282,15 +339,16 @@ class AppController extends ChangeNotifier {
       if (ticket != _loadTicket || generation != _generation) return;
       if (cached != null) {
         try {
-          messages = decodeList(jsonDecode(cached))
-              .map((x) => MailMessage.fromJson(Map<String, dynamic>.from(x)))
-              .toList();
+          _restoreMailboxCache(cached);
+          messages = _withEdits(messages);
           changed();
         } catch (_) {}
       }
     }
     try {
-      final cursor = more && messages.isNotEmpty ? messages.last.id : 0;
+      if (!more) await _flushEdits();
+      if (ticket != _loadTicket || generation != _generation) return;
+      final cursor = more ? _pageCursor : 0;
       final path = capabilities.organization
           ? '/mobile/mail'
           : folder == 'star'
@@ -305,7 +363,8 @@ class AppController extends ChangeNotifier {
               if (selectedAddress != null) 'accountId': '$selectedAddress',
             }
           : {
-              'accountId': '${selectedAddress ?? addresses.first.id}',
+              'accountId':
+                  '${legacyStarred ? addresses.first.id : selectedAddress ?? addresses.first.id}',
               'allReceive': selectedAddress == null ? '1' : '0',
               'emailId': '$cursor',
               'timeSort': '0',
@@ -313,12 +372,14 @@ class AppController extends ChangeNotifier {
               'type': folder == 'sent' ? '1' : '0',
               'full': '1',
             };
-      if (query.isNotEmpty) {
+      if (query.isNotEmpty && !legacyStarred) {
         params['text'] = query;
         params['searchType'] = searchType;
       }
-      if (startDate.isNotEmpty) params['startDate'] = startDate;
-      if (endDate.isNotEmpty) params['endDate'] = endDate;
+      if (startDate.isNotEmpty && !legacyStarred) {
+        params['startDate'] = startDate;
+      }
+      if (endDate.isNotEmpty && !legacyStarred) params['endDate'] = endDate;
       final response = await client.request('GET', path, query: params);
       if (ticket != _loadTicket || generation != _generation) return;
       final rows = response is Map ? decodeList(response['list']) : <dynamic>[];
@@ -326,6 +387,8 @@ class AppController extends ChangeNotifier {
           .whereType<Map>()
           .map((x) => MailMessage.fromJson(Map<String, dynamic>.from(x)))
           .toList();
+      if (page.isNotEmpty) _pageCursor = page.last.id;
+      lastServerSync = DateTime.now();
       messages = more
           ? {
               for (final m in [...messages, ...page]) m.id: m,
@@ -343,7 +406,14 @@ class AppController extends ChangeNotifier {
         }
         return j;
       }).toList();
-      await _write(key, jsonEncode(cached));
+      messages = _withEdits(messages);
+      await _write(
+        key,
+        jsonEncode({
+          'messages': cached,
+          'syncedAt': lastServerSync?.toIso8601String(),
+        }),
+      );
     } catch (e) {
       if (ticket == _loadTicket && generation == _generation) {
         offline = true;
@@ -364,16 +434,22 @@ class AppController extends ChangeNotifier {
       throw const ApiFailure(503, 'The server needs the mobile API update');
     }
     folder = value;
+    if (legacyStarred) selectedAddress = null;
     messages = [];
     hasMore = false;
     query = '';
     error = '';
     ++_loadTicket;
     changed();
-    await loadMessages();
+    if (value == 'drafts') {
+      await syncDrafts();
+    } else {
+      await loadMessages();
+    }
   }
 
   Future<void> selectAddress(int? id) async {
+    if (legacyStarred) return;
     selectedAddress = id;
     messages = [];
     ++_loadTicket;
@@ -388,13 +464,13 @@ class AppController extends ChangeNotifier {
       try {
         if (capabilities.organization) {
           final data = await client.request('GET', '/mobile/mail/${mail.id}');
-          current = MailMessage.fromJson(Map<String, dynamic>.from(data as Map))
-              .copy(
-                starred: mail.starred,
-                version: mail.version,
-                folder: mail.folder,
-                labels: mail.labels,
-              );
+          final row = Map<String, dynamic>.from(data as Map);
+          current = MailMessage.fromJson(row).copy(
+            starred: row.containsKey('isStar') ? null : mail.starred,
+            version: row.containsKey('version') ? null : mail.version,
+            folder: row.containsKey('folder') ? null : mail.folder,
+            labels: row.containsKey('labels') ? null : mail.labels,
+          );
         } else {
           final atts = await client.request(
             'GET',
@@ -456,16 +532,28 @@ class AppController extends ChangeNotifier {
       );
     }
     final client = api!, generation = _generation;
-    final response = await client.request(
-      'PUT',
-      '/mobile/mail/${mail.id}/state',
-      body: {
-        'version': mail.version,
-        'folder': ?target,
-        'labels': ?labels,
-        'read': ?read,
-      },
-    );
+    final patch = <String, dynamic>{
+      'version': mail.version,
+      'folder': ?target,
+      'labels': ?labels,
+      'read': ?read,
+    };
+    if (offline || pendingEdits.any((edit) => edit.emailId == mail.id)) {
+      return _queueEdit(mail, patch);
+    }
+    Object? response;
+    try {
+      response = await client.request(
+        'PUT',
+        '/mobile/mail/${mail.id}/state',
+        body: patch,
+      );
+    } on ApiFailure catch (e) {
+      _requireGeneration(generation);
+      if (e.code != 0) rethrow;
+      offline = true;
+      return _queueEdit(mail, patch);
+    }
     if (generation != _generation) {
       throw const ApiFailure(401, 'Session changed');
     }
@@ -479,24 +567,69 @@ class AppController extends ChangeNotifier {
     return next;
   }
 
+  Future<({List<MailMessage> list, bool truncated})> conversation(
+    MailMessage mail,
+  ) async {
+    final generation = _generation;
+    final result = await api!.request(
+      'GET',
+      '/mobile/mail/${mail.id}/conversation',
+    ) as Map;
+    _requireGeneration(generation);
+    final list = decodeList(result['list'])
+        .whereType<Map>()
+        .map((row) => MailMessage.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
+    return (list: list, truncated: result['truncated'] == true);
+  }
+
+  Future<void> setSenderCategory(String sender, String category) async {
+    final generation = _generation;
+    if (category.isEmpty) {
+      await api!.request(
+        'DELETE',
+        '/mobile/rules/sender',
+        query: {'sender': sender},
+      );
+    } else {
+      await api!.request(
+        'PUT',
+        '/mobile/rules/sender',
+        body: {'sender': sender, 'category': category},
+      );
+    }
+    _requireGeneration(generation);
+    await loadMessages();
+  }
+
+  Future<String> suggestReply(MailMessage mail) async {
+    final generation = _generation;
+    final row = await api!.request(
+      'POST',
+      '/mobile/assistant/${mail.id}',
+      query: {'mode': 'reply'},
+    ) as Map;
+    _requireGeneration(generation);
+    return asText(row['draft']);
+  }
+
   Future<void> saveDraft(MailDraft draft) async {
-    final key = 'drafts:$scope';
     final index = drafts.indexWhere((d) => d.id == draft.id);
     if (index < 0) {
       drafts.insert(0, draft);
     } else {
       drafts[index] = draft;
     }
-    await _write(key, jsonEncode(drafts.map((d) => d.toJson()).toList()));
+    await _persistDrafts();
     changed();
   }
 
   Future<void> deleteDraft(MailDraft draft) async {
+    if (draft.revision > 0 || draftsSyncing) {
+      draftDeletes[draft.id] = draft.revision;
+    }
     drafts.removeWhere((d) => d.id == draft.id);
-    await _write(
-      'drafts:$scope',
-      jsonEncode(drafts.map((d) => d.toJson()).toList()),
-    );
+    await _persistDrafts();
     changed();
   }
 
@@ -509,6 +642,9 @@ class AppController extends ChangeNotifier {
           'Update the Worker and mobile migration before safe sending. Your draft is retained.',
         ),
       );
+    }
+    if (draft.missingAttachments > 0) {
+      throw const ApiFailure(409, 'Attachments are on the original device');
     }
     if (draft.outcomeUncertain) {
       throw ApiFailure(
@@ -523,7 +659,13 @@ class AppController extends ChangeNotifier {
     if ((payload['receiveEmail'] as List).isEmpty) {
       throw const FormatException('Recipient is required');
     }
-    if (draft.requestKey.isEmpty) draft.requestKey = newId();
+    if (draft.requestKey.isEmpty) {
+      draft.requestKey = draft.revision > 0
+          ? sha256
+                .convert(utf8.encode('draft:${draft.id}:${draft.revision}'))
+                .toString()
+          : newId();
+    }
     draft.sendState = 'pending';
     final client = api!, generation = _generation;
     await saveDraft(draft);
@@ -546,9 +688,11 @@ class AppController extends ChangeNotifier {
       }
       return draft.sendState;
     } catch (e) {
-      draft.sendState = e is ApiFailure && [400, 403, 413].contains(e.code)
-          ? 'rejected'
-          : 'unknown';
+      draft.sendState = switch (e) {
+        ApiFailure(code: 409) => 'conflict',
+        ApiFailure(code: 400 || 403 || 413) => 'rejected',
+        _ => 'unknown',
+      };
       if (generation == _generation) await saveDraft(draft);
       rethrow;
     }
@@ -566,9 +710,18 @@ class AppController extends ChangeNotifier {
     final client = api!, generation = _generation;
     Object? data;
     try {
-      data = await client.request('GET', '/mobile/send/${draft.requestKey}');
+      data = await client.request(
+        'GET',
+        '/mobile/send/${draft.requestKey}',
+        query: {'payloadHash': sendPayloadHash(draft.sendPayload())},
+      );
     } on ApiFailure catch (e) {
       _requireGeneration(generation);
+      if (e.code == 409) {
+        draft.sendState = 'conflict';
+        await saveDraft(draft);
+        rethrow;
+      }
       if (e.code != 404) rethrow;
       draft.sendState = 'notSubmitted';
       await saveDraft(draft);
@@ -610,6 +763,10 @@ class AppController extends ChangeNotifier {
 
   Future<void> logout() async {
     final client = api;
+    final pushKey = 'push:$scope', pushRotationKey = 'push-rotation:$scope';
+    final device = pushDevice;
+    final hadPush =
+        capabilities.push || pushConfigured || device != null || pushBusy;
     ++_generation;
     ++_loadTicket;
     api = null;
@@ -617,6 +774,17 @@ class AppController extends ChangeNotifier {
     addresses = [];
     messages = [];
     drafts = [];
+    draftDeletes.clear();
+    pendingEdits = [];
+    draftsSyncing = false;
+    editsSyncing = false;
+    draftSyncStatus = '';
+    draftLastSync = null;
+    lastServerSync = null;
+    pushConfigured = false;
+    pushBusy = false;
+    pushDevice = null;
+    pushStatus = '';
     capabilities = const Capabilities();
     busy = false;
     ready = true;
@@ -627,10 +795,26 @@ class AppController extends ChangeNotifier {
         .catchError((_) {})
         .then((_) => vault.delete('session'));
     _writes = removal;
+    if (hadPush) {
+      try {
+        await pushChannel
+            .invokeMethod<void>('disable')
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      await vault.delete(pushKey);
+      await vault.delete(pushRotationKey);
+    }
     await removal;
     changed();
     if (client != null) {
       try {
+        if (device != null) {
+          try {
+            await client
+                .request('DELETE', '/mobile/devices/$device')
+                .timeout(const Duration(seconds: 5));
+          } catch (_) {}
+        }
         await client
             .request('DELETE', '/logout')
             .timeout(const Duration(seconds: 5));

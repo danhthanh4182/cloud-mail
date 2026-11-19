@@ -262,3 +262,11 @@ class ConnectionBanner extends StatelessWidget {
     ),
   );
 }
+
+Map<String, String> mailCategories(AppController state) => {
+  'primary': state.t('Chính', 'Primary'),
+  'updates': state.t('Cập nhật', 'Updates'),
+  'promotions': state.t('Khuyến mãi', 'Promotions'),
+  'security': state.t('Bảo mật', 'Security'),
+  'invoice': state.t('Hóa đơn', 'Invoice'),
+};

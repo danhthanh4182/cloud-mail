@@ -36,3 +36,21 @@ Coverage numbers and performance measurements are published only from actual run
 - Independent Spec and Standards reviewers reported six documentation/harness/UI findings. Corrected FR18 behavioral cases, provider-aware send guarantees, artifact-policy wording, all-PR guardrail trigger, rendered mobile typography/targets and modal focus handling. Device/TalkBack checks remain pending.
 
 - `npm run test:design --prefix .harness`: reusable prototype regression includes visible mobile button targets >=48px, search/empty/reader/theme behavior and modal forward/reverse tab trap plus focus restoration. Local run sets MOCKUP_BROWSER to the standalone headless shell; CI uses Playwright installed Chromium. This is not native-device certification.
+
+## Android 0.3 completion pass
+
+The previous results above describe the 0.2.0 milestone. The current result is tracked against the Android 0.3 PR revision.
+
+| Case | Automated evidence | Remaining live or device evidence |
+|---|---|---|
+| AC19 | Worker tests traverse References and In-Reply-To. They exclude identical subjects with no header link and other users and addresses. | Expand a long conversation on Android and check accessibility focus. |
+| AC20 | Flutter widget test renders a table, removes active HTML and verifies image consent in a table cell. | Inspect real newsletters and TalkBack on Android. CSS layout, CID images and original email image dimensions are limited. |
+| AC21 | Worker checks attachment ownership. Flutter uses cancelable bounded HTTP streaming and saves through the system picker. | Cancel, retry, save and forward an original attachment with the Android picker and a controlled provider. |
+| AC22 | Flutter tests clean updates, conflict copies, remote deletion and deletion during an upload. SQLite and D1 tests verify revision checks and atomic tombstones. | Exercise two Android devices with text drafts and device-local attachments. |
+| AC23 | Flutter test reopens an offline queue with its last-sync time, rejects a stale write and retains a conflict. D1 tests atomic state changes. | Switch connectivity during actual Android app process death and recovery. |
+| AC24 | Unit tests cover rules and budget, reject unsafe suggestion output, and preview a bilingual search filter. | Exercise live Workers AI with sample mail and verify suggestions remain editable. |
+| AC25 | Flutter tests denied permission. Worker tests scope registration and renewal, revoke credentials and verify the private push payload. | Configure staging FCM. Verify receive, tap, token rotation, background behavior and logout on Android. |
+| AC26 | Flutter tests gate unsupported organization. Worker route tests apply Starred address, HTML-body and date filters. | Verify opening an unchanged 0.2 Worker and a migrated staging Worker. |
+| AC27 | Native Actions builds a debug APK and verifies signature, package and checksum. Signed candidate workflow checks the configured certificate fingerprint. | Run signed candidate with a protected release environment and record candidate-specific device evidence. |
+
+The production release gate remains pending. Offline mailbox replay refreshes snapshots. Worker event and draft APIs are versioned separately, and the Android client does not maintain a complete offline mirror of every mailbox folder.

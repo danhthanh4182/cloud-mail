@@ -17,8 +17,16 @@ The new Worker endpoints require `mail-worker/migrations/001_mobile.sql`, applie
 
 ## Distribution
 
-GitHub Actions runs Worker and Flutter tests, builds a **debug test-signed APK**, verifies its signature and attaches source SHA + SHA256 checksums. APKs, signing keys, Gradle output and private data must never enter Git. Release signing is intentionally unconfigured. Debug signatures may change between clean hosted runners; uninstalling to switch keys also deletes device drafts, so export/retain important content first.
+GitHub Actions runs Worker and Flutter tests, builds a **debug test-signed APK**, verifies its signature and attaches source SHA + SHA256 checksums. APKs, signing keys, Gradle output and private data must never enter Git. A separate manual workflow supports verification with a configured release certificate. Debug signatures may change between clean hosted runners; uninstalling to switch keys also deletes device drafts, so export/retain important content first.
 
-## Current acceptance boundary
+## Android completion features and configuration
 
-This is a daily-client implementation milestone, not the complete Gmail-like release. Remaining gates: Android physical-device acceptance, rich HTML table fidelity, full threading, cross-device draft UI, offline mutation queue, push/FCM lifecycle, natural-language search and corrected sender rules. Push is explicitly unavailable; foreground refresh is not push. No real mail has been sent by development tests.
+Android 0.3 adds header-based conversations, native HTML formatting and tables, per-message HTTPS image consent, controlled attachment download and forwarding, versioned draft replicas, offline edits, sender categorization, editable natural-language filters, AI reply suggestions and Firebase push.
+
+Apply `mail-worker/migrations/001_mobile.sql` and then `002_mobile_completion.sql` to **staging** before enabling v2 features. The app negotiates capabilities. Draft text and the attachment count are replicated; file bytes and unresolved send intents stay with the originating device. Pending reversible edits are persisted locally and checked against server versions on reconnect.
+
+For push, set `CLOUD_MAIL_FCM_APP_ID`, `CLOUD_MAIL_FCM_API_KEY`, `CLOUD_MAIL_FCM_PROJECT_ID`, and `CLOUD_MAIL_FCM_SENDER_ID` in Actions variables for the Android app `dev.danhthanh.cloudmail.nativeapp`. Configure the Worker secret `MOBILE_FCM_SERVICE_ACCOUNT` with the corresponding service account JSON and FCM HTTP v1 permissions. No credentials are bundled in source. An Android 13+ device must allow notification permission. A Firebase-enabled device or emulator with Google Play services is required.
+
+The manual **Signed Android release candidate** workflow uses the `android-release` environment and its `CLOUD_MAIL_KEYSTORE_BASE64`, `CLOUD_MAIL_SIGNING_STORE_PASSWORD`, `CLOUD_MAIL_SIGNING_KEY_ALIAS`, and `CLOUD_MAIL_SIGNING_KEY_PASSWORD` secrets. Set `CLOUD_MAIL_SIGNING_CERT_SHA256` to the expected certificate fingerprint. The workflow verifies that fingerprint before attaching the APK.
+
+See [completion acceptance](../../specs/001-native-mail/completion-acceptance.md) and [QA evidence](../../specs/001-native-mail/qa-evidence.md) for measured results and live acceptance status.

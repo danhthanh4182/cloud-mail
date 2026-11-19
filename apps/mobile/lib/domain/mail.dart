@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:html/parser.dart' as html;
 import 'package:html/dom.dart' as dom;
 
@@ -97,6 +98,7 @@ class MailMessage {
   final int id, accountId, version, type;
   final String subject, sender, name, to, text, content, time, folder, cc;
   final bool unread, starred;
+  final String category, reason;
   final List<String> labels;
   final List<Map<String, dynamic>> attachments;
   const MailMessage({
@@ -113,6 +115,8 @@ class MailMessage {
     this.content = '',
     this.time = '',
     this.folder = 'inbox',
+    this.category = '',
+    this.reason = '',
     this.unread = true,
     this.starred = false,
     this.labels = const [],
@@ -138,6 +142,8 @@ class MailMessage {
     content: asText(j['content']),
     time: asText(j['createTime']),
     folder: asText(j['folder']).isEmpty ? 'inbox' : asText(j['folder']),
+    category: asText(j['category']),
+    reason: asText(j['reason']),
     unread: asInt(j['unread']) == 0,
     starred: asInt(j['isStar']) == 1 || j['starId'] != null,
     labels: decodeList(j['labels']).map((x) => '$x').toList(),
@@ -162,6 +168,8 @@ class MailMessage {
     version: version ?? this.version,
     subject: subject,
     type: type,
+    category: category,
+    reason: reason,
     cc: cc,
     sender: sender,
     name: name,
@@ -180,6 +188,8 @@ class MailMessage {
     'accountId': accountId,
     'version': version,
     'type': type,
+    'category': category,
+    'reason': reason,
     'cc': cc.split(', ').where((x) => x.isNotEmpty).toList(),
     'subject': subject,
     'sendEmail': sender,
@@ -209,7 +219,9 @@ List<dynamic> decodeList(dynamic value) {
 
 class MailDraft {
   final String id;
-  int accountId, replyId, revision;
+  int accountId, replyId, revision, missingAttachments;
+  String syncStamp;
+  bool conflictCopy;
   String to, cc, bcc, subject, body, sendType, requestKey, sendState;
   List<Map<String, dynamic>> attachments;
   MailDraft({
@@ -217,6 +229,9 @@ class MailDraft {
     this.accountId = 0,
     this.replyId = 0,
     this.revision = 0,
+    this.syncStamp = '',
+    this.conflictCopy = false,
+    this.missingAttachments = 0,
     this.to = '',
     this.cc = '',
     this.bcc = '',
@@ -233,6 +248,9 @@ class MailDraft {
     accountId: asInt(j['accountId']),
     replyId: asInt(j['replyId']),
     revision: asInt(j['revision']),
+    syncStamp: asText(j['syncStamp']),
+    conflictCopy: j['conflictCopy'] == true,
+    missingAttachments: asInt(j['missingAttachments']),
     to: asText(j['to']),
     cc: asText(j['cc']),
     bcc: asText(j['bcc']),
@@ -255,12 +273,16 @@ class MailDraft {
     'pending',
     'partial',
     'notSubmitted',
+    'conflict',
   ].contains(sendState);
   Map<String, dynamic> toJson() => {
     'id': id,
     'accountId': accountId,
     'replyId': replyId,
     'revision': revision,
+    'syncStamp': syncStamp,
+    'conflictCopy': conflictCopy,
+    'missingAttachments': missingAttachments,
     'to': to,
     'cc': cc,
     'bcc': bcc,
@@ -289,17 +311,53 @@ class MailDraft {
 }
 
 class Capabilities {
-  final bool organization, safeSend, assistant, draftSync;
+  final bool organization,
+      safeSend,
+      assistant,
+      draftSync,
+      conversation,
+      smartMail,
+      push;
   const Capabilities({
     this.organization = false,
     this.safeSend = false,
     this.assistant = false,
     this.draftSync = false,
+    this.conversation = false,
+    this.smartMail = false,
+    this.push = false,
   });
+  Map<String, dynamic> toJson() => {
+    'version': 2,
+    'organization': organization,
+    'safeSend': safeSend,
+    'assistant': assistant,
+    'draftSync': draftSync,
+    'conversation': conversation,
+    'smartMail': smartMail,
+    'push': push,
+  };
   factory Capabilities.fromJson(Map<String, dynamic> j) => Capabilities(
     organization: j['organization'] == true,
     safeSend: j['safeSend'] == true,
     assistant: j['assistant'] == true,
-    draftSync: j['draftSync'] == true,
+    draftSync: asInt(j['version']) >= 2 && j['draftSync'] == true,
+    conversation: j['conversation'] == true,
+    smartMail: j['smartMail'] == true,
+    push: j['push'] == true,
   );
+}
+
+/// Canonical payload identity shared by send and reconciliation.
+String sendPayloadHash(Map<String, dynamic> payload) {
+  Object? canonical(Object? value) {
+    if (value is Map<String, dynamic>) {
+      final keys = value.keys.toList()..sort();
+      return {for (final key in keys) key: canonical(value[key])};
+    }
+    if (value is List) return value.map(canonical).toList();
+    return value;
+  }
+
+  return sha256.convert(utf8.encode(jsonEncode(canonical(payload)))).toString();
 }

@@ -1,6 +1,6 @@
 # Tasks · 001-native-mail
 
-T001 is approved. Native daily-client source and Actions APK are implemented in PR #9; T002–T008 have implementation evidence with device acceptance pending. T009–T012 remain partial/pending; see `docs/implementation-ledger.md`. Every task ends with implementation evidence and Standards + Spec review. Do not check a task merely because its file exists.
+T001 is approved. [AC19–AC27](completion-acceptance.md) specify the Android completion pass. CI and controlled-device evidence are tracked separately in [QA evidence](qa-evidence.md).
 
 | ID | Task / deliverable | Blocks on | Requirements | Acceptance evidence |
 |---|---|---|---|---|

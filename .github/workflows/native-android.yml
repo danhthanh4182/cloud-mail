@@ -45,6 +45,11 @@ jobs:
         working-directory: apps/mobile
       - run: python3 scripts/harness.py verify
       - name: Build test-signed native APK
+        env:
+          CLOUD_MAIL_FCM_APP_ID: ${{ vars.CLOUD_MAIL_FCM_APP_ID }}
+          CLOUD_MAIL_FCM_API_KEY: ${{ vars.CLOUD_MAIL_FCM_API_KEY }}
+          CLOUD_MAIL_FCM_PROJECT_ID: ${{ vars.CLOUD_MAIL_FCM_PROJECT_ID }}
+          CLOUD_MAIL_FCM_SENDER_ID: ${{ vars.CLOUD_MAIL_FCM_SENDER_ID }}
         run: flutter build apk --debug --build-number=${{ github.run_number }}
         working-directory: apps/mobile
       - name: Verify and describe test artifact

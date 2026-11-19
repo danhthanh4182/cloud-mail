@@ -126,6 +126,7 @@ class _ComposeScreenState extends State<ComposeScreen>
           }
         }
         final data = bytes.takeBytes();
+        if (d.missingAttachments > 0) d.missingAttachments--;
         d.attachments.add({
           'filename': file.name,
           'mimeType': lookupMimeType(file.name) ?? 'application/octet-stream',
@@ -234,7 +235,11 @@ class _ComposeScreenState extends State<ComposeScreen>
             ),
             IconButton(
               tooltip: s.t('Gửi thư', 'Send email'),
-              onPressed: locked || picking || !s.capabilities.safeSend
+              onPressed:
+                  locked ||
+                      picking ||
+                      !s.capabilities.safeSend ||
+                      d.missingAttachments > 0
                   ? null
                   : send,
               icon: sending
@@ -251,6 +256,43 @@ class _ComposeScreenState extends State<ComposeScreen>
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              if (d.missingAttachments > 0)
+                ListTile(
+                  leading: const Icon(Icons.attach_file),
+                  title: Text(
+                    s.t(
+                      'Tệp đang ở thiết bị đã tạo nháp. Hãy thêm lại trước khi gửi.',
+                      'Attachments are on the original device. Reattach them before sending.',
+                    ),
+                  ),
+                  trailing: IconButton(
+                    tooltip: s.t(
+                      'Bỏ tệp còn thiếu',
+                      'Remove missing attachments',
+                    ),
+                    onPressed: locked
+                        ? null
+                        : () async {
+                            if (await confirm(
+                                  context,
+                                  s,
+                                  s.t(
+                                    'Bỏ tệp còn thiếu?',
+                                    'Remove missing attachments?',
+                                  ),
+                                  s.t(
+                                    'Thư sẽ được gửi với các tệp hiện có.',
+                                    'Only attachments on this device will be included.',
+                                  ),
+                                ) &&
+                                mounted) {
+                              setState(() => d.missingAttachments = 0);
+                              await save();
+                            }
+                          },
+                    icon: const Icon(Icons.clear),
+                  ),
+                ),
               if (!s.capabilities.safeSend)
                 Text(
                   s.t(
@@ -258,7 +300,39 @@ class _ComposeScreenState extends State<ComposeScreen>
                     'The server needs the mobile API update for safe sending. You can still compose and save drafts.',
                   ),
                 ),
-              if (d.outcomeUncertain)
+              if (d.sendState == 'conflict')
+                ListTile(
+                  title: Text(
+                    s.t(
+                      'Một máy khác đã dùng lần gửi này với nội dung khác.',
+                      'Another device used this send intent for different content.',
+                    ),
+                  ),
+                  subtitle: Text(
+                    s.t(
+                      'Lưu bản sao để xem lại trước khi gửi.',
+                      'Keep an editable copy for review before sending.',
+                    ),
+                  ),
+                  trailing: IconButton(
+                    tooltip: s.t('Lưu bản sao', 'Keep a copy'),
+                    icon: const Icon(Icons.copy),
+                    onPressed: () async {
+                      final copy = MailDraft.fromJson({
+                        ...d.toJson(),
+                        'id': newId(),
+                        'revision': 0,
+                        'syncStamp': '',
+                        'sendState': '',
+                        'requestKey': '',
+                        'conflictCopy': true,
+                      });
+                      await s.saveDraft(copy);
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                ),
+              if (d.outcomeUncertain && d.sendState != 'conflict')
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -413,7 +487,11 @@ class _ComposeScreenState extends State<ComposeScreen>
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: locked || picking || !s.capabilities.safeSend
+                onPressed:
+                    locked ||
+                        picking ||
+                        !s.capabilities.safeSend ||
+                        d.missingAttachments > 0
                     ? null
                     : send,
                 icon: const Icon(Icons.send_outlined),
