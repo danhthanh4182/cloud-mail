@@ -12,3 +12,9 @@
 10. **Rollback**: disable new features first, stop new writers, roll back app via known-good signed build if needed. D1 additive migrations avoid destructive rollback; retained old code paths remain compatible. Send idempotency records must survive rollback.
 
 **Production-readiness blockers**: exact deployment URL/version, push infrastructure provisioning, stable release signer, migrated-state staging test, physical Android device acceptance. None are required to draw the design; each is required for the corresponding release claim.
+
+## Android installation tracks
+
+- **Preview** uses `dev.danhthanh.cloudmail.nativeapp.preview` and a hosted-runner debug certificate. It can be installed alongside the canonical app and keeps its own sign-in and local drafts. The artifact's `manifest.txt` and `signature.txt` identify the exact package and signer.
+- **Signed release candidate** uses `dev.danhthanh.cloudmail.nativeapp` and the certificate configured in the protected `android-release` environment. Use the same trusted release key and an increasing version code for subsequent releases.
+- When Android reports a conflicting package, compare application IDs and certificate fingerprints, and retain important local drafts before replacing any existing installation. For legacy hosted debug builds using the canonical package, install Preview alongside them.

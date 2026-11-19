@@ -74,7 +74,7 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 
 ## Remaining Android scope
 
-[Android completion and acceptance](completion-acceptance.md) defines AC19–AC28 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility, release evidence and message identities. These cases supplement US01–US08.
+[Android completion and acceptance](completion-acceptance.md) defines AC19–AC29 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility, release evidence, message identities and parallel installation. These cases supplement US01–US08.
 
 ## Functional Requirements
 

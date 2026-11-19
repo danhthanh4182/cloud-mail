@@ -44,31 +44,33 @@ jobs:
       - run: flutter analyze && flutter test --dart-define=CAPTURE_NATIVE=true
         working-directory: apps/mobile
       - run: python3 scripts/harness.py verify
-      - name: Build test-signed native APK
+      - name: Build Cloud Mail Preview APK
         env:
-          CLOUD_MAIL_FCM_APP_ID: ${{ vars.CLOUD_MAIL_FCM_APP_ID }}
-          CLOUD_MAIL_FCM_API_KEY: ${{ vars.CLOUD_MAIL_FCM_API_KEY }}
-          CLOUD_MAIL_FCM_PROJECT_ID: ${{ vars.CLOUD_MAIL_FCM_PROJECT_ID }}
-          CLOUD_MAIL_FCM_SENDER_ID: ${{ vars.CLOUD_MAIL_FCM_SENDER_ID }}
+          CLOUD_MAIL_PREVIEW_FCM_APP_ID: ${{ vars.CLOUD_MAIL_PREVIEW_FCM_APP_ID }}
+          CLOUD_MAIL_PREVIEW_FCM_API_KEY: ${{ vars.CLOUD_MAIL_PREVIEW_FCM_API_KEY }}
+          CLOUD_MAIL_PREVIEW_FCM_PROJECT_ID: ${{ vars.CLOUD_MAIL_PREVIEW_FCM_PROJECT_ID }}
+          CLOUD_MAIL_PREVIEW_FCM_SENDER_ID: ${{ vars.CLOUD_MAIL_PREVIEW_FCM_SENDER_ID }}
         run: flutter build apk --debug --build-number=${{ github.run_number }}
         working-directory: apps/mobile
       - name: Verify and describe test artifact
         shell: bash
         run: |
           mkdir -p native-artifact
-          cp apps/mobile/build/app/outputs/flutter-apk/app-debug.apk native-artifact/cloud-mail-native-debug.apk
+          cp apps/mobile/build/app/outputs/flutter-apk/app-debug.apk native-artifact/cloud-mail-preview.apk
           APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          "$APK_SIGNER" verify --verbose --print-certs native-artifact/cloud-mail-native-debug.apk > native-artifact/signature.txt
+          "$APK_SIGNER" verify --verbose --print-certs native-artifact/cloud-mail-preview.apk > native-artifact/signature.txt
           APK_AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
-          "$APK_AAPT" dump badging native-artifact/cloud-mail-native-debug.apk > native-artifact/manifest.txt
-          grep -F "package: name='dev.danhthanh.cloudmail.nativeapp'" native-artifact/manifest.txt
+          "$APK_AAPT" dump badging native-artifact/cloud-mail-preview.apk > native-artifact/manifest.txt
+          grep -F "package: name='dev.danhthanh.cloudmail.nativeapp.preview'" native-artifact/manifest.txt
+          grep -Fx "application-label:'Cloud Mail Preview'" native-artifact/manifest.txt
+          grep -F "launchable-activity: name='dev.danhthanh.cloudmail.nativeapp.MainActivity'" native-artifact/manifest.txt
           grep -F "sdkVersion:'26'" native-artifact/manifest.txt
           cp -r apps/mobile/build/native-previews native-artifact/
-          sha256sum native-artifact/cloud-mail-native-debug.apk > native-artifact/SHA256SUMS
-          printf 'source=%s\nkind=test-signed debug APK\napplicationId=dev.danhthanh.cloudmail.nativeapp\nbackend=mobile routes and D1 migration required for organization/safe send\n' "$GITHUB_SHA" > native-artifact/BUILD-INFO.txt
+          (cd native-artifact && sha256sum cloud-mail-preview.apk > SHA256SUMS)
+          printf 'source=%s\nkind=test-signed preview APK\napplicationId=dev.danhthanh.cloudmail.nativeapp.preview\ninstall=side by side with Cloud Mail; Preview has separate local data\nbackend=mobile routes and D1 migration required for organization/safe send\n' "$GITHUB_SHA" > native-artifact/BUILD-INFO.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: cloud-mail-native-debug-${{ github.sha }}
+          name: cloud-mail-preview-${{ github.sha }}
           path: native-artifact/
           retention-days: 14
           if-no-files-found: error

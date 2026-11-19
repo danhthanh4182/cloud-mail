@@ -19,19 +19,6 @@ android {
     }
 
     defaultConfig {
-        val firebaseResources = mapOf(
-            "APP_ID" to "google_app_id",
-            "API_KEY" to "google_api_key",
-            "PROJECT_ID" to "project_id",
-            "SENDER_ID" to "gcm_defaultSenderId",
-        ).mapValues { (key, name) -> name to System.getenv("CLOUD_MAIL_FCM_$key").orEmpty() }
-        if (firebaseResources.values.all { (_, value) -> value.isNotBlank() }) {
-            firebaseResources.values.forEach { (name, value) -> resValue("string", name, value) }
-        }
-        listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID").forEach { key ->
-            resValue("string", "cloud_mail_fcm_${key.lowercase()}", System.getenv("CLOUD_MAIL_FCM_$key") ?: "")
-        }
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "dev.danhthanh.cloudmail.nativeapp"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -55,6 +42,31 @@ android {
         }
     }
     buildTypes {
+        configureEach {
+            val preview = name == "debug" || name == "profile"
+            if (preview) applicationIdSuffix = ".preview"
+            manifestPlaceholders["cloudMailAppLabel"] =
+                if (preview) "Cloud Mail Preview" else "Cloud Mail"
+
+            val firebasePrefix = if (preview) "CLOUD_MAIL_PREVIEW_FCM" else "CLOUD_MAIL_FCM"
+            val firebaseResources = mapOf(
+                "APP_ID" to "google_app_id",
+                "API_KEY" to "google_api_key",
+                "PROJECT_ID" to "project_id",
+                "SENDER_ID" to "gcm_defaultSenderId",
+            )
+            val firebaseValues = firebaseResources.mapValues { (key, _) ->
+                System.getenv("${firebasePrefix}_$key").orEmpty()
+            }
+            firebaseValues.forEach { (key, value) ->
+                resValue("string", "cloud_mail_fcm_${key.lowercase()}", value)
+            }
+            if (firebaseValues.values.all { it.isNotBlank() }) {
+                firebaseResources.forEach { (key, name) ->
+                    resValue("string", name, firebaseValues.getValue(key))
+                }
+            }
+        }
         release {
             signingConfig = signingConfigs.findByName("cloudMailRelease")
         }
