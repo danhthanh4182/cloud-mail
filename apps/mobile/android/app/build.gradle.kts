@@ -1,11 +1,15 @@
+import com.android.build.api.variant.ResValue
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val cloudMailApplicationId = "dev.danhthanh.cloudmail.nativeapp"
+
 android {
-    namespace = "dev.danhthanh.cloudmail.nativeapp"
+    namespace = cloudMailApplicationId
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.danhthanh.cloudmail.nativeapp"
+        applicationId = cloudMailApplicationId
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -42,33 +46,39 @@ android {
         }
     }
     buildTypes {
-        configureEach {
-            val preview = name == "debug" || name == "profile"
-            if (preview) applicationIdSuffix = ".preview"
-            manifestPlaceholders["cloudMailAppLabel"] =
-                if (preview) "Cloud Mail Preview" else "Cloud Mail"
-
-            val firebasePrefix = if (preview) "CLOUD_MAIL_PREVIEW_FCM" else "CLOUD_MAIL_FCM"
-            val firebaseResources = mapOf(
-                "APP_ID" to "google_app_id",
-                "API_KEY" to "google_api_key",
-                "PROJECT_ID" to "project_id",
-                "SENDER_ID" to "gcm_defaultSenderId",
-            )
-            val firebaseValues = firebaseResources.mapValues { (key, _) ->
-                System.getenv("${firebasePrefix}_$key").orEmpty()
-            }
-            firebaseValues.forEach { (key, value) ->
-                resValue("string", "cloud_mail_fcm_${key.lowercase()}", value)
-            }
-            if (firebaseValues.values.all { it.isNotBlank() }) {
-                firebaseResources.forEach { (key, name) ->
-                    resValue("string", name, firebaseValues.getValue(key))
-                }
-            }
-        }
         release {
             signingConfig = signingConfigs.findByName("cloudMailRelease")
+        }
+    }
+}
+
+androidComponents {
+    // Flutter copies app build types into plugin projects. Keep these settings on app variants only.
+    onVariants { variant ->
+        val preview = variant.buildType == "debug" || variant.buildType == "profile"
+        if (preview) variant.applicationId.set("$cloudMailApplicationId.preview")
+        variant.manifestPlaceholders.put("cloudMailAppLabel", if (preview) "Cloud Mail Preview" else "Cloud Mail")
+
+        val firebasePrefix = if (preview) "CLOUD_MAIL_PREVIEW_FCM" else "CLOUD_MAIL_FCM"
+        val firebaseResources = mapOf(
+            "APP_ID" to "google_app_id",
+            "API_KEY" to "google_api_key",
+            "PROJECT_ID" to "project_id",
+            "SENDER_ID" to "gcm_defaultSenderId",
+        )
+        val firebaseValues = firebaseResources.mapValues { (key, _) ->
+            System.getenv("${firebasePrefix}_$key").orEmpty()
+        }
+        fun setStringResource(name: String, value: String) {
+            variant.resValues.put(variant.makeResValueKey("string", name), ResValue(value, null))
+        }
+        firebaseValues.forEach { (key, value) ->
+            setStringResource("cloud_mail_fcm_${key.lowercase()}", value)
+        }
+        if (firebaseValues.values.all { it.isNotBlank() }) {
+            firebaseResources.forEach { (key, name) ->
+                setStringResource(name, firebaseValues.getValue(key))
+            }
         }
     }
 }
