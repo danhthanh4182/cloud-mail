@@ -18,19 +18,22 @@ function replicaPayload(id,payload) {
  return clean;
 }
 
+// Keep worst-case UTF-8 page size below the Android API response budget.
+const pageSize=20;
+
 export async function getDrafts(db,userId,cursor='') {
  if (cursor) validateId(cursor);
  const {results} = await db.prepare(`
   SELECT draft_id, account_id, revision, payload, 0 AS deleted FROM mobile_draft WHERE user_id=? AND draft_id>?
   UNION ALL
   SELECT draft_id, 0, revision, NULL, 1 FROM mobile_draft_tombstone WHERE user_id=? AND draft_id>?
-  ORDER BY draft_id LIMIT 101
- `).bind(userId,cursor,userId,cursor).all();
- const list=results.slice(0,100).map(row=>({
+  ORDER BY draft_id LIMIT ?
+ `).bind(userId,cursor,userId,cursor,pageSize+1).all();
+ const list=results.slice(0,pageSize).map(row=>({
   draftId:row.draft_id,revision:row.revision,deleted:row.deleted===1,
   payload:row.payload ? replicaPayload(row.draft_id,JSON.parse(row.payload)) : null,
  }));
- return {list,nextCursor:results.length>100 ? list.at(-1).draftId : null};
+ return {list,nextCursor:results.length>pageSize ? list.at(-1).draftId : null};
 }
 
 export async function putDraft(db,userId,id,body) {

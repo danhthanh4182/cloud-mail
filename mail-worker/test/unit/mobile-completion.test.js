@@ -61,6 +61,21 @@ describe('mobile completion contracts',()=>{
   await expect(putDraft(db,1,draft.id,{revision:0,payload:draft})).rejects.toMatchObject({code:409});
  });
 
+ it('paginates draft snapshots within the Android response budget',async()=>{
+  const db=fixture();
+  const body='x'.repeat(380000);
+  for (let i=0;i<21;i++) {
+   const payload={id:`draft-page-${String(i).padStart(2,'0')}`,accountId:10,body};
+   await putDraft(db,1,payload.id,{revision:0,payload});
+  }
+  const page=await getDrafts(db,1);
+  expect(page.list).toHaveLength(20);
+  expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThan(9*1024*1024);
+  const next=await getDrafts(db,1,page.nextCursor);
+  expect(next.list.map(draft=>draft.draftId)).toEqual(['draft-page-20']);
+  expect(next.nextCursor).toBeNull();
+ });
+
  it('prioritizes an owned sender rule and caps hosted AI calls',async()=>{
   const db=fixture();
   const mail={subject:'Your security code',send_email:'Sender@example.test'};
