@@ -33,6 +33,8 @@ Spacing scale 4,8,12,16,20,24,32,40; default mobile inset20; list row min88; tou
 | AppBar/SearchField | default/focused/query/loading | search scope visible, clear accessible |
 | MailListItem | unread/read/starred/selected/attachment | sender,subject,preview,time; row action labels |
 | OtpCard | validated/ambiguous/copied/expired-known | copy only source-validated code; never invented expiry |
+| Message identity | sender, collapsed and expanded To/Cc, authenticated domain | sender address remains visible next to its initials; To/Cc details expand locally; the shield has a text label and explains domain authentication |
+| Message labels | reader, mailbox preview | neutral surface with rounded labels; wrap at larger font sizes; cap the mailbox preview and show the remaining count |
 | FolderChip | selected/unselected/count | count explained as server total or local subset |
 | BottomNavigation | Inbox/Starred/Drafts/Settings | text labels retained; active pill and semantic selected |
 | ComposeFAB | collapsed/extended | bottom safe-area aware, never covers final row |

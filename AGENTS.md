@@ -6,7 +6,7 @@
 3. `docs/adr/` and `specs/001-native-mail/design/design-system.md`
 4. `plan.md`, `tasks.md`, `.harness/orchestration.json`, `.harness/guardrails.json`
 
-Current phase: specification/design. Product approval is pending in `.harness/approval.json`. Do not claim an approved design or production-ready app. User authorization permits preparing source/spec/mockups/harness; changing approval to approved requires an actual user decision recorded with reference.
+Current phase: implementation. User approved the spec/design on 2026-11-19 (recorded in `.harness/approval.json`). Continue through the plan; do not ask again for design approval. Production merge/deploy and live third-party messages remain separate actions.
 
 ## Commands
 - `python3 scripts/harness.py verify`: source guardrails, required artifacts, internal links, DAG and design tokens.

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 # Server-owned organization with an isolated encrypted offline cache
 

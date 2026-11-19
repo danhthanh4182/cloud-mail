@@ -1,6 +1,6 @@
 # QA strategy and evidence
 
-Status: specification/design stage. No Flutter/native-client runtime, backend-extension or production-compatibility tests have run. The old wrapper APK passed compilation/signature checks but does NOT validate this new product.
+Status: native daily-client implementation milestone, PR #9. Flutter analyze and 27 automated Flutter tests pass; Worker 91 unit and 3 runtime tests pass. The native APK is built through Actions. Device/live-send/push/production compatibility acceptance remains pending. The old wrapper build is superseded and is not native-product evidence.
 
 ## Planned matrix
 | Area | Cases | Environment / gate |
@@ -20,8 +20,8 @@ Status: specification/design stage. No Flutter/native-client runtime, backend-ex
 |---|---|---|
 | 2026-11-18 | Source/API inventory | Read baseline files; listed research.md |
 | 2026-11-18 | Official Spec Kit init | CLI scaffold completed; upstream revision in research.md |
-| Pending | Native unit/widget/device suite | Not run; client not yet implemented |
-| Pending | Worker additive migrations/security tests | Not run; proposed endpoints not implemented |
+| 2026-11-18 UTC | Native analysis/unit/widget | Passed locally and in Actions; 360/412/840px × 100/200% text; hardware acceptance pending |
+| 2026-11-18 UTC | Worker additive migration/ownership/send/assistant tests | 91 unit + 3 Cloudflare runtime passed; production migration not run |
 | Pending | Live deployment acceptance/push | Requires configured controlled deployment and credentials |
 
 Coverage numbers and performance measurements are published only from actual runs. A mockup screenshot is design evidence, never evidence of APK behavior.
@@ -31,8 +31,37 @@ Coverage numbers and performance measurements are published only from actual run
 - `python3 -m unittest discover -s tests/harness -v`: 5 tests passed. Negative cases reject tracked APK/keys, DAG cycles, stale evidence and missing decision/check references.
 - `python3 scripts/harness.py verify`: passed source/design structure and guardrail checks (not runtime application tests).
 - Official `check-prerequisites.sh --json --require-tasks --include-tasks`: resolved this feature and required task documents.
-- `python3 scripts/harness.py release-check`: failed as intended because design approval, native app and release evidence are pending. This failure is expected, not waived.
+- `python3 scripts/harness.py release-check`: failed in design phase as intended. Design is now approved; complete device/integration/signing evidence remains pending. This failure is expected, not waived.
 - Headless prototype interaction check: rendered light/dark/wireframe/component boards; tested search, empty results, reader navigation and simulated-send confirmation with no page errors. Local Chromium launcher was unsupported; verification used a standalone Chrome Headless Shell. This is web prototype evidence only.
 - Independent Spec and Standards reviewers reported six documentation/harness/UI findings. Corrected FR18 behavioral cases, provider-aware send guarantees, artifact-policy wording, all-PR guardrail trigger, rendered mobile typography/targets and modal focus handling. Device/TalkBack checks remain pending.
 
 - `npm run test:design --prefix .harness`: reusable prototype regression includes visible mobile button targets >=48px, search/empty/reader/theme behavior and modal forward/reverse tab trap plus focus restoration. Local run sets MOCKUP_BROWSER to the standalone headless shell; CI uses Playwright installed Chromium. This is not native-device certification.
+
+## Android 0.3 completion pass
+
+The previous results above describe the 0.2.0 milestone. The current result is tracked against the Android 0.3 PR revision.
+
+Local verification on 2026-11-19 used Flutter 3.50.0. Analysis found no issues. 33 Flutter tests, 97 Worker unit tests, four Worker runtime tests and five harness tests passed. Android APK compilation and signature/manifest verification are recorded by the PR workflow.
+
+| Case | Automated evidence | Remaining live or device evidence |
+|---|---|---|
+| AC19 | Worker tests traverse References and In-Reply-To. They exclude identical subjects with no header link and other users and addresses. | Expand a long conversation on Android and check accessibility focus. |
+| AC20 | Flutter widget test renders a table, removes active HTML and verifies image consent in a table cell. | Inspect real newsletters and TalkBack on Android. CSS layout, CID images and original email image dimensions are limited. |
+| AC21 | Worker checks attachment ownership. Flutter uses cancelable bounded HTTP streaming and saves through the system picker. | Cancel, retry, save and forward an original attachment with the Android picker and a controlled provider. |
+| AC22 | Flutter tests clean updates, conflict copies, remote deletion and deletion during an upload. SQLite and D1 tests verify revision checks and atomic tombstones. | Exercise two Android devices with text drafts and device-local attachments. |
+| AC23 | Flutter test reopens an offline queue with its last-sync time, rejects a stale write and retains a conflict. D1 tests atomic state changes. | Switch connectivity during actual Android app process death and recovery. |
+| AC24 | Unit tests cover rules and budget, reject unsafe suggestion output, and preview a bilingual search filter. | Exercise live Workers AI with sample mail and verify suggestions remain editable. |
+| AC25 | Flutter tests denied permission. Worker tests scope registration and renewal, revoke credentials and verify the private push payload. | Configure staging FCM. Verify receive, tap, token rotation, background behavior and logout on Android. |
+| AC26 | Flutter tests gate unsupported organization. Worker route tests apply Starred address, HTML-body and date filters. | Verify opening an unchanged 0.2 Worker and a migrated staging Worker. |
+| AC27 | Native Actions builds a debug APK and verifies signature, package and checksum. Signed candidate workflow checks the configured certificate fingerprint. | Run signed candidate with a protected release environment and record candidate-specific device evidence. |
+
+The production release gate remains pending. Offline mailbox replay refreshes snapshots. Worker event and draft APIs are versioned separately, and the Android client does not maintain a complete offline mirror of every mailbox folder.
+
+## Android 0.3.1 reader follow-up
+
+Verified locally on 2026-11-19 with Flutter 3.50.0. Flutter analysis found no issues and all 39 Flutter tests passed. Candidate APK signature, manifest, checksum and the exact source revision are recorded by the native Android Actions workflow. The workflow includes a dark reader PNG captured from Flutter widgets with synthetic mail.
+
+| Case | Automated evidence | Device or provider evidence pending |
+|---|---|---|
+| AC20 | A synthetic nested verification email exposed repeated renderings before the fix. It now renders once in source order at 360 logical pixels and 200% text scale. A wide nested data table scrolls independently, and a headerless data table keeps empty values in their columns. The image test checks whether a request starts after consent. | Verify the original email on Android and TalkBack order. Dense unmarked HTML tables rely on structure for classification. Live image decoding and CSS-dependent layouts are outside these widget fixtures. |
+| AC28 | Widgets show local initials, named and unnamed To/Cc addresses, label previews and the domain-authentication explanation. The old-message fixture stays unbadged with lookalike text. Backend fixtures cover gateway trust, forged fields, missing migration and isolation between owners. | A staged Android test needs migration 003, a matching Worker and freshly received mail through Cloudflare Email Routing. |

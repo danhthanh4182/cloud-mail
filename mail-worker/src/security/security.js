@@ -22,6 +22,7 @@ const exclude = [
 ];
 
 const requirePerms = [
+	'/mobile/send',
 	'/email/send',
 	'/email/delete',
 	'/account/list',
@@ -63,7 +64,7 @@ const requirePerms = [
 
 const premKey = {
 	'email:delete': ['/email/delete'],
-	'email:send': ['/email/send'],
+	'email:send': ['/email/send','/mobile/send'],
 	'account:add': ['/account/add'],
 	'account:query': ['/account/list'],
 	'account:delete': ['/account/delete'],
@@ -92,6 +93,8 @@ const premKey = {
 app.use('*', async (c, next) => {
 
 	const path = c.req.path;
+	// Only this operation uses an installation credential. Mail endpoints still require a user JWT.
+	if (path === '/mobile/push/renew' && c.req.method === 'PUT') return await next();
 
 	const index = exclude.findIndex(item => {
 		return matchesPathPrefix(path, item);

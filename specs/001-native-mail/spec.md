@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-native-mail`  
 **Created**: 2026-11-18  
-**Status**: Draft for product/design review; no native implementation claimed.  
+**Status**: Approved for implementation by user on 2026-11-19. Android completion implementation is tracked in PR #9. Final device, live provider and release-signing acceptance is tracked separately.
 **Input**: Người dùng yêu cầu APK hoàn chỉnh, đẹp, có design system và trải nghiệm thông minh như Gmail; không chấp nhận ứng dụng chỉ bọc WebView. Áp dụng Spec Kit, Superpowers, Ask Matt và SDLC. Không commit file build vào Git.
 
 ## Intent and proposed product boundary
@@ -32,7 +32,8 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 1. Mở thư bằng giao diện native, hiển thị người gửi/người nhận/CC/thời gian/nội dung; chỉ đánh dấu đọc khi mở thành công.
 2. Mã được trích có đối chiếu với thư gốc, nút copy một chạm và phản hồi hỗ trợ trình đọc màn hình. Không chọn bừa khi có nhiều ứng viên ngang nhau.
 3. Mã chỉ được gắn hạn sử dụng nếu thư ghi rõ; không suy đoán thời hạn hay tự đảm bảo link an toàn.
-4. HTML có bảng/liên kết được hiển thị phù hợp, script không chạy và ảnh theo dõi không tự tải. Link mở bằng trình duyệt ngoài sau thao tác của người dùng.
+4. HTML dùng bảng để dàn bố cục được đọc theo một cột, theo thứ tự nguồn và mỗi đoạn chỉ xuất hiện một lần. Bảng dữ liệu giữ hàng và cột, cuộn ngang độc lập khi rộng. Script không chạy và ảnh từ xa chỉ tải sau khi người dùng đồng ý. Link mở bằng trình duyệt ngoài sau thao tác của người dùng.
+5. Phần đầu thư hiển thị avatar chữ cái và địa chỉ người gửi, danh sách Đến/Cc có thể mở rộng và nhãn đã gán cho thư. Dấu xác thực tên miền chỉ xuất hiện khi máy chủ có kết quả DMARC pass từ cổng nhận đáng tin cậy.
 5. Tệp được tải/mở qua luồng có kiểm soát quyền sở hữu; có tiến độ, hủy, lỗi và giới hạn dung lượng rõ ràng.
 
 ### US04 · Soạn, trả lời, chuyển tiếp và nháp (P1)
@@ -70,6 +71,10 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 2. Theme theo hệ thống hoặc chọn tay; ngôn ngữ lưu theo thiết bị; mọi thao tác icon có nhãn accessibility.
 3. Hộp thư dễ quét: tên người gửi, tiêu đề, preview, thời gian, unread, sao; OTP nổi bật nhưng không chiếm hết danh sách.
 4. Giao diện không dùng màu đơn độc để phân biệt trạng thái; animation tôn trọng giảm chuyển động.
+
+## Remaining Android scope
+
+[Android completion and acceptance](completion-acceptance.md) defines AC19–AC29 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility, release evidence, message identities and parallel installation. These cases supplement US01–US08.
 
 ## Functional Requirements
 

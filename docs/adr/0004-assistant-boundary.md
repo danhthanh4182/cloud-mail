@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 # Rule-first OTP and bounded AI assistance
 

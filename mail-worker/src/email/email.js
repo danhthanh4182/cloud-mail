@@ -1,4 +1,6 @@
 import PostalMime from 'postal-mime';
+import {scheduleIncomingPush} from '../service/mobile/push';
+import {senderDomainAuthenticated,persistSenderAuthentication} from '../service/mobile/sender-authentication';
 import emailService from '../service/email-service';
 import accountService from '../service/account-service';
 import settingService from '../service/setting-service';
@@ -157,6 +159,14 @@ export async function email(message, env, ctx) {
 
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
 
+		// Optional additive evidence must never prevent ordinary mail delivery.
+		try {
+			await persistSenderAuthentication(env.db,emailRow,senderDomainAuthenticated(message.headers,email));
+		} catch {
+			console.warn('Cloud Mail sender authentication evidence unavailable');
+		}
+
+		if (account) scheduleIncomingPush(env,ctx,[emailRow]);
 
 		if (ruleType === settingConst.ruleType.RULE) {
 

@@ -1,5 +1,26 @@
 {
   "source_revision": null,
-  "checks": [],
-  "note": "Design phase only. No native implementation or release evidence is claimed."
+  "checks": [
+    {
+      "name": "analyze",
+      "result": "passed",
+      "evidence_reference": "docs/implementation-ledger.md"
+    },
+    {
+      "name": "unit",
+      "result": "passed",
+      "evidence_reference": "docs/implementation-ledger.md"
+    },
+    {
+      "name": "widget",
+      "result": "passed",
+      "evidence_reference": "apps/mobile/test/layout_test.dart"
+    },
+    {
+      "name": "backend",
+      "result": "passed",
+      "evidence_reference": "mail-worker/test/unit/mobile-routes.test.js"
+    }
+  ],
+  "note": "Implementation checkpoint: analyze and automated tests pass locally. Current revision/device/integration/signing/artifact release evidence is incomplete; release-check must still reject production readiness."
 }

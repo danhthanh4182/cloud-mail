@@ -1,0 +1,8 @@
+[
+ {"name":"english verification","subject":"Verify your account","body":"Your verification code is 482619. Do not share it.","expected":"482619"},
+ {"name":"vietnamese code","subject":"Đăng nhập","body":"Mã xác nhận của bạn là 083741. Có hiệu lực trong 5 phút.","expected":"083741"},
+ {"name":"grouped numeric","subject":"OTP","body":"Your OTP: 123 456","expected":"123456"},
+ {"name":"order not otp","subject":"Your order","body":"Order 482619 costs 150000 VND. Phone 0912345678.","expected":""},
+ {"name":"ambiguous codes","subject":"Verification","body":"Verification code 123456 or verification code 654321","expected":""},
+ {"name":"alphanumeric","subject":"Security code","body":"Security code: AB12CD34","expected":"AB12CD34"}
+]

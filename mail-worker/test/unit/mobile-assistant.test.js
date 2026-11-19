@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {redactAssistantInput,validateAssistantOutput} from '../../src/service/mobile/assistant';
+it('masks credentials, URLs, grouped codes and JWTs before a model call',()=>{const source='Password: CorrectHorseBattery!\nAuthorization: Bearer abcdefghijklmnop\nAPI_KEY=sk-exampleprivate123456789\nCode: 123 456\nhttps://example.com/reset?secret=abcdef\neyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoxfQ.signaturesignature';const safe=redactAssistantInput(source);for(const privateValue of ['CorrectHorseBattery','abcdefghijklmnop','sk-example','123 456','https://','eyJhbGci'])expect(safe).not.toContain(privateValue);});
+it('rejects invented URLs or credentials even with exact evidence',()=>{const source='Your invoice is ready for review.';expect(()=>validateAssistantOutput({summary:'Open https://evil.example/ and use password: stolen',evidence:[source]},source)).toThrow();});
