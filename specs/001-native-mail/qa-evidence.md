@@ -56,3 +56,12 @@ Local verification on 2026-11-19 used Flutter 3.50.0. Analysis found no issues. 
 | AC27 | Native Actions builds a debug APK and verifies signature, package and checksum. Signed candidate workflow checks the configured certificate fingerprint. | Run signed candidate with a protected release environment and record candidate-specific device evidence. |
 
 The production release gate remains pending. Offline mailbox replay refreshes snapshots. Worker event and draft APIs are versioned separately, and the Android client does not maintain a complete offline mirror of every mailbox folder.
+
+## Android 0.3.1 reader follow-up
+
+Verified locally on 2026-11-19 with Flutter 3.50.0. Flutter analysis found no issues and all 39 Flutter tests passed. Candidate APK signature, manifest, checksum and the exact source revision are recorded by the native Android Actions workflow. The workflow includes a dark reader PNG captured from Flutter widgets with synthetic mail.
+
+| Case | Automated evidence | Device or provider evidence pending |
+|---|---|---|
+| AC20 | A synthetic nested verification email exposed repeated renderings before the fix. It now renders once in source order at 360 logical pixels and 200% text scale. A wide nested data table scrolls independently, and a headerless data table keeps empty values in their columns. The image test checks whether a request starts after consent. | Verify the original email on Android and TalkBack order. Dense unmarked HTML tables rely on structure for classification. Live image decoding and CSS-dependent layouts are outside these widget fixtures. |
+| AC28 | Widgets show local initials, named and unnamed To/Cc addresses, label previews and the domain-authentication explanation. The old-message fixture stays unbadged with lookalike text. Backend fixtures cover gateway trust, forged fields, missing migration and isolation between owners. | A staged Android test needs migration 003, a matching Worker and freshly received mail through Cloudflare Email Routing. |

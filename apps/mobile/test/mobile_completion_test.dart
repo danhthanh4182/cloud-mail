@@ -205,7 +205,8 @@ void main() {
     tester,
   ) async {
     const source =
-        '<table><tr><td><b>Total due</b><img src="https://example.test/a.png"></td></tr></table>'
+        '<table><tr><th>Item</th><th>Amount</th></tr>'
+        '<tr><td><b>Total due</b><img src="https://example.test/a.png"></td><td>12 USD</td></tr></table>'
         '<script>malicious content</script><a href="javascript:bad()">link</a>';
     final document = safeMailHtml(source)!;
     expect(

@@ -49,10 +49,11 @@ Compatibility: clients work with baseline functions on older deployments, clearl
 
 ## Android v2 additions
 
-Apply both mobile migrations before advertising v2. The legacy read API and v1 organization/send contracts retain their existing response envelopes.
+Apply `001_mobile.sql` and `002_mobile_completion.sql` before advertising v2. The legacy read API and v1 organization/send contracts retain their existing response envelopes.
 
 | Route | Contract |
 |---|---|
+| `GET /mobile/mail`, `GET /mobile/mail/:id` | Optional `senderDomainAuthenticated` boolean derived from direct Cloudflare Email Routing DMARC evidence for the owned message. `003_sender_authentication.sql` enables recording the evidence. The client treats an absent or false value as unknown. Existing `recipient` and `cc` structured names and addresses are available to the reader. |
 | `GET /mobile/mail/:id/conversation` | User- and account-scoped header traversal. Returns related message headers and `truncated`. The reader fetches full owned messages as they expand. |
 | `GET /mobile/v2/drafts` | Drafts and deletion tombstones, ordered by ID. Repeat with `cursor=nextCursor` until it is null. |
 | `PUT /mobile/v2/drafts/:id` | Create at revision 0 or update the expected revision. A mismatch returns 409. The server stores draft text and attachment count. |

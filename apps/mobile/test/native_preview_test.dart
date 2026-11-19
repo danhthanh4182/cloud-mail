@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -9,6 +10,7 @@ import 'package:cloud_mail/app.dart';
 import 'package:cloud_mail/app_controller.dart';
 import 'package:cloud_mail/data/api.dart';
 import 'package:cloud_mail/domain/mail.dart';
+import 'package:cloud_mail/features/reader.dart';
 
 import 'session_test.dart' show MemoryVault;
 
@@ -113,6 +115,35 @@ void main() {
     state.changed();
     await tester.pumpAndSettle();
     await tester.runAsync(() => capture('inbox-dark'));
+    unawaited(
+      Navigator.of(tester.element(find.text('Mã xác nhận đăng nhập'))).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ReaderScreen(
+            state: state,
+            mail: const MailMessage(
+              id: 101,
+              sender: 'security@example.com',
+              name: 'Example Security',
+              subject: 'Mã xác nhận đăng nhập',
+              recipients: [MailParticipant('thanh@example.com', name: 'Thanh')],
+              senderDomainAuthenticated: true,
+              labels: ['Bảo mật', 'Tài khoản'],
+              content: '''
+                <table role="presentation"><tr><td></td><td>
+                  <table><tr><td>Chào Thanh,</td></tr>
+                    <tr><td>Mã xác nhận của bạn là <b>083741</b>.</td></tr>
+                    <tr><td>Nếu bạn không yêu cầu đăng nhập, hãy bỏ qua thư này.</td></tr>
+                  </table>
+                </td></tr></table>
+              ''',
+              time: '2026-11-18 10:20:30',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => capture('reader-dark'));
     await tester.pumpWidget(const SizedBox());
     state.dispose();
   });

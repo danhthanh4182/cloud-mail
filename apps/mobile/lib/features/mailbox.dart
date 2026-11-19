@@ -7,6 +7,7 @@ import '../domain/mail.dart';
 import '../domain/smart_mail.dart';
 import '../design_system/components.dart';
 import 'compose.dart';
+import 'message_header.dart';
 import 'reader.dart';
 import 'settings.dart';
 
@@ -753,6 +754,13 @@ class _MailboxScreenState extends State<MailboxScreen>
             );
           }
           final m = s.messages[i];
+          final recipients = m.type == 1
+              ? m.toPeople
+              : const <MailParticipant>[];
+          final recipient = recipients.isEmpty ? null : recipients.first;
+          final name = recipient == null
+              ? m.displayName
+              : '${s.t('Đến', 'To')} · ${recipient.displayName}';
           return Column(
             children: [
               ListTile(
@@ -760,14 +768,14 @@ class _MailboxScreenState extends State<MailboxScreen>
                   horizontal: 8,
                   vertical: 10,
                 ),
-                leading: Avatar(m.displayName),
+                leading: Avatar(recipient?.displayName ?? m.displayName),
                 title: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        m.displayName.isEmpty
+                        name.isEmpty
                             ? s.t('Không rõ người gửi', 'Unknown sender')
-                            : m.displayName,
+                            : name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -777,6 +785,15 @@ class _MailboxScreenState extends State<MailboxScreen>
                         ),
                       ),
                     ),
+                    if (m.authenticatedDomain case final String domain)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: SenderAuthenticationBadge(
+                          state: s,
+                          domain: domain,
+                          compact: true,
+                        ),
+                      ),
                     const SizedBox(width: 8),
                     Text(
                       m.time.length >= 10 ? m.time.substring(5, 10) : m.time,
@@ -812,6 +829,16 @@ class _MailboxScreenState extends State<MailboxScreen>
                       Text(
                         mailCategories(s)[m.category] ?? m.category,
                         style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    if (m.labels.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: MessageLabels(
+                          m.labels,
+                          limit: 2,
+                          moreLabel: (count) =>
+                              s.t('$count nhãn khác', '$count more labels'),
+                        ),
                       ),
                     if (m.code.isNotEmpty)
                       Padding(

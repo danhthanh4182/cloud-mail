@@ -72,21 +72,46 @@ class RichMailBody extends StatelessWidget {
     );
   }
 
+  Iterable<dom.Element> _tableRows(dom.Element table) sync* {
+    for (final child in table.children) {
+      if (child.localName == 'tr') yield child;
+      if (['thead', 'tbody', 'tfoot'].contains(child.localName)) {
+        yield* child.children.where((row) => row.localName == 'tr');
+      }
+    }
+  }
+
+  bool _isDataTable(dom.Element table, List<List<dom.Element>> rows) {
+    final role = table.attributes['role']?.trim().toLowerCase();
+    if (role == 'presentation' || role == 'none') return false;
+    if (role == 'table' || role == 'grid' || role == 'treegrid') return true;
+    if (table.children.any((child) => child.localName == 'caption') ||
+        rows.any((row) => row.any((cell) => cell.localName == 'th'))) {
+      return true;
+    }
+
+    // Regular headerless tables can have missing values. A fully populated
+    // row distinguishes their columns from recurring empty spacer cells.
+    return rows.length >= 2 &&
+        rows.first.length >= 2 &&
+        rows.any((row) => row.every((cell) => cell.text.trim().isNotEmpty)) &&
+        rows.every(
+          (row) =>
+              row.length == rows.first.length &&
+              row.every(
+                (cell) =>
+                    !cell.attributes.containsKey('colspan') &&
+                    !cell.attributes.containsKey('rowspan') &&
+                    cell.querySelector('table') == null,
+              ),
+        );
+  }
+
   Widget _table(
     BuildContext context,
-    dom.Element element,
+    List<List<dom.Element>> rows,
     Widget Function(dom.Element) cellBody,
   ) {
-    final rows = element
-        .querySelectorAll('tr')
-        .take(80)
-        .map(
-          (row) => row.children
-              .where((cell) => ['td', 'th'].contains(cell.localName))
-              .take(12)
-              .toList(),
-        )
-        .toList();
     final columns = rows.fold(
       0,
       (max, row) => row.length > max ? row.length : max,
@@ -118,9 +143,6 @@ class RichMailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Flush inline text in blocks so tables retain their position in the message.
-    final blocks = <Widget>[];
-    var inline = <InlineSpan>[];
     var images = 0;
     var visited = 0;
     Widget? remoteImage(dom.Element node) {
@@ -135,62 +157,107 @@ class RichMailBody extends StatelessWidget {
       );
     }
 
-    Widget cellBody(dom.Element cell) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text.rich(_span(cell)),
-        if (showImages)
-          for (final img in cell.querySelectorAll('img[src]').take(6))
-            if (remoteImage(img) case final Widget child) child,
-      ],
-    );
-
-    void flush() {
-      if (inline.isEmpty) return;
-      blocks.add(
-        Text.rich(
-          TextSpan(children: inline),
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-      );
-      inline = [];
-    }
-
-    void visit(dom.Node node, int depth) {
-      if (depth > 24 || visited++ > 1500) return;
-      if (node is dom.Element) {
-        if (node.localName == 'table') {
-          flush();
-          blocks.add(_table(context, node, cellBody));
-          return;
+    List<Widget> render(
+      Iterable<dom.Node> nodes,
+      int depth,
+      TextStyle? textStyle,
+    ) {
+      final blocks = <Widget>[];
+      var inline = <InlineSpan>[];
+      void flush() {
+        if (inline.isEmpty) return;
+        final span = TextSpan(children: inline);
+        if (span.toPlainText().trim().isNotEmpty) {
+          blocks.add(Text.rich(span, style: textStyle));
         }
-        if (node.localName == 'img') {
-          final image = remoteImage(node);
-          if (image != null) {
+        inline = [];
+      }
+
+      void visit(dom.Node node, int depth) {
+        if (depth > 24 || visited++ > 1500) return;
+        if (node is dom.Element) {
+          if (node.localName == 'table') {
+            final rows = _tableRows(node)
+                .take(80)
+                .map(
+                  (row) => row.children
+                      .where((cell) => ['td', 'th'].contains(cell.localName))
+                      .take(12)
+                      .toList(),
+                )
+                .where((row) => row.isNotEmpty)
+                .toList();
             flush();
-            blocks.add(image);
+            for (final caption in node.children.where(
+              (child) => child.localName == 'caption',
+            )) {
+              for (final child in caption.nodes) {
+                visit(child, depth + 1);
+              }
+              flush();
+            }
+            if (_isDataTable(node, rows)) {
+              blocks.add(
+                _table(
+                  context,
+                  rows,
+                  (cell) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: render(
+                      cell.nodes,
+                      depth + 1,
+                      cell.localName == 'th'
+                          ? const TextStyle(fontWeight: FontWeight.bold)
+                          : null,
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              for (final row in rows) {
+                for (final cell in row) {
+                  for (final child in cell.nodes) {
+                    visit(child, depth + 1);
+                  }
+                  flush();
+                }
+              }
+            }
+            return;
+          }
+          if (node.localName == 'img') {
+            final image = remoteImage(node);
+            if (image != null) {
+              flush();
+              blocks.add(image);
+              return;
+            }
+          }
+          if (node.querySelector(showImages ? 'table,img' : 'table') != null) {
+            for (final child in node.nodes) {
+              visit(child, depth + 1);
+            }
             return;
           }
         }
-        if (node.querySelector('table,${showImages ? 'img' : 'table'}') !=
-            null) {
-          for (final child in node.nodes) {
-            visit(child, depth + 1);
-          }
-          return;
-        }
+        inline.add(_span(node));
       }
-      inline.add(_span(node));
+
+      for (final node in nodes) {
+        visit(node, depth);
+      }
+      flush();
+      return blocks;
     }
 
-    for (final node in document.nodes) {
-      visit(node, 0);
-    }
-    flush();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final block in blocks)
+        for (final block in render(
+          document.nodes,
+          0,
+          Theme.of(context).textTheme.bodyLarge,
+        ))
           Padding(padding: const EdgeInsets.only(bottom: 8), child: block),
       ],
     );

@@ -52,20 +52,87 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final parts = name.trim().split(RegExp(r'\s+'));
-    final initial = name.trim().isEmpty
+    final source = name.trim();
+    final parts = source.contains('@')
+        ? source.split('@').first.split(RegExp(r'[.\s_-]+'))
+        : source.split(RegExp(r'\s+'));
+    final words = parts.where((part) => part.isNotEmpty).toList();
+    final initial = words.isEmpty
         ? '?'
-        : parts.length > 1
-        ? '${parts.first.characters.first}${parts.last.characters.first}'
-        : name.characters.first;
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: scheme.primaryContainer,
-      foregroundColor: scheme.primary,
-      child: Text(
-        initial.toUpperCase(),
-        style: TextStyle(fontWeight: FontWeight.w700, fontSize: size * .33),
+        : words.length > 1
+        ? '${words.first.characters.first}${words.last.characters.first}'
+        : words.first.characters.first;
+    return ExcludeSemantics(
+      child: CircleAvatar(
+        radius: size / 2,
+        backgroundColor: scheme.primaryContainer,
+        foregroundColor: scheme.onPrimaryContainer,
+        child: Padding(
+          padding: EdgeInsets.all(size * .15),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              initial.toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: size * .33,
+              ),
+            ),
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class MessageLabels extends StatelessWidget {
+  final List<String> labels;
+  final String Function(int) moreLabel;
+  final int? limit;
+  const MessageLabels(
+    this.labels, {
+    super.key,
+    required this.moreLabel,
+    this.limit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final visible = labels.take(limit ?? labels.length);
+    final remaining = labels.length - visible.length;
+
+    Widget pill(String label) => DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colors.onSurfaceVariant,
+          ),
+          maxLines: limit == null ? null : 1,
+          overflow: limit == null ? null : TextOverflow.ellipsis,
+        ),
+      ),
+    );
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final label in visible) pill(label),
+        if (remaining > 0)
+          Semantics(
+            label: moreLabel(remaining),
+            excludeSemantics: true,
+            child: pill('+$remaining'),
+          ),
+      ],
     );
   }
 }

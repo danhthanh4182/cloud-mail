@@ -14,6 +14,7 @@ import '../app_controller.dart';
 import '../domain/mail.dart';
 import '../design_system/components.dart';
 import 'compose.dart';
+import 'message_header.dart';
 
 class ReaderScreen extends StatefulWidget {
   final AppController state;
@@ -395,54 +396,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   : m.subject,
               style: Theme.of(context).textTheme.headlineMedium,
             ),
-            const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Avatar(m.displayName),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        m.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        m.sender,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: c.onSurfaceVariant,
-                        ),
-                      ),
-                      Text(
-                        '${s.t('Đến', 'To')}: ${m.to}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: c.onSurfaceVariant,
-                        ),
-                      ),
-                      if (m.cc.isNotEmpty)
-                        Text(
-                          'CC: ${m.cc}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: c.onSurfaceVariant,
-                          ),
-                        ),
-                      Text(
-                        m.time,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: c.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+            if (m.labels.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: MessageLabels(
+                  m.labels,
+                  moreLabel: (count) =>
+                      s.t('$count nhãn khác', '$count more labels'),
                 ),
-              ],
-            ),
+              ),
+            const SizedBox(height: 24),
+            MessageHeader(state: s, mail: m),
             if (thread != null)
               FutureBuilder<({List<MailMessage> list, bool truncated})>(
                 future: thread,
@@ -511,14 +475,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 onPressed: chooseCategory,
                 icon: const Icon(Icons.label_outline),
                 label: Text(s.t('Phân loại theo người gửi', 'Sender category')),
-              ),
-            if (m.labels.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Wrap(
-                  spacing: 8,
-                  children: m.labels.map((e) => Chip(label: Text(e))).toList(),
-                ),
               ),
             if (m.code.isNotEmpty)
               Padding(
@@ -729,6 +685,7 @@ class _ConversationItemState extends State<_ConversationItem> {
     if (widget.current) {
       return ListTile(
         selected: true,
+        leading: Avatar(item.displayName, size: 32),
         title: Text(item.displayName),
         subtitle: Text(
           s.t('Thư đang đọc · ${item.time}', 'Current message · ${item.time}'),
@@ -736,6 +693,7 @@ class _ConversationItemState extends State<_ConversationItem> {
       );
     }
     return ExpansionTile(
+      leading: Avatar(item.displayName, size: 32),
       title: Text(item.displayName),
       subtitle: Text('${item.subject} · ${item.time}'),
       onExpansionChanged: (open) {

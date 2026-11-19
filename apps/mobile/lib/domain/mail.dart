@@ -94,12 +94,38 @@ class MailAddress {
   };
 }
 
+class MailParticipant {
+  final String address, name;
+  const MailParticipant(this.address, {this.name = ''});
+
+  String get displayName => name.isEmpty ? address : name;
+
+  Map<String, String> toJson() => {'address': address, 'name': name};
+
+  static List<MailParticipant> read(dynamic source) => [
+    for (final item in decodeList(source))
+      if (item is Map && asText(item['address']).trim().isNotEmpty)
+        MailParticipant(
+          asText(item['address']).trim(),
+          name: asText(item['name']).trim(),
+        )
+      else if (item is String && item.trim().isNotEmpty)
+        MailParticipant(item.trim()),
+  ];
+
+  static List<MailParticipant> addresses(String value) => [
+    for (final address in value.split(','))
+      if (address.trim().isNotEmpty) MailParticipant(address.trim()),
+  ];
+}
+
 class MailMessage {
   final int id, accountId, version, type;
   final String subject, sender, name, to, text, content, time, folder, cc;
-  final bool unread, starred;
+  final bool unread, starred, senderDomainAuthenticated;
   final String category, reason;
   final List<String> labels;
+  final List<MailParticipant> recipients, copiedRecipients;
   final List<Map<String, dynamic>> attachments;
   const MailMessage({
     required this.id,
@@ -119,40 +145,58 @@ class MailMessage {
     this.reason = '',
     this.unread = true,
     this.starred = false,
+    this.senderDomainAuthenticated = false,
     this.labels = const [],
+    this.recipients = const [],
+    this.copiedRecipients = const [],
     this.attachments = const [],
   });
-  factory MailMessage.fromJson(Map<String, dynamic> j) => MailMessage(
-    id: asInt(j['emailId']),
-    accountId: asInt(j['accountId']),
-    version: asInt(j['version']),
-    type: asInt(j['type']),
-    cc: decodeList(j['cc'])
-        .map((x) => x is Map ? asText(x['address']) : '$x')
-        .join(', '),
-    subject: asText(j['subject']),
-    sender: asText(j['sendEmail']),
-    name: asText(j['name']),
-    to: decodeList(j['recipient']).isNotEmpty
-        ? decodeList(j['recipient'])
-              .map((x) => x is Map ? asText(x['address']) : '$x')
-              .join(', ')
-        : asText(j['toEmail']),
-    text: asText(j['text']),
-    content: asText(j['content']),
-    time: asText(j['createTime']),
-    folder: asText(j['folder']).isEmpty ? 'inbox' : asText(j['folder']),
-    category: asText(j['category']),
-    reason: asText(j['reason']),
-    unread: asInt(j['unread']) == 0,
-    starred: asInt(j['isStar']) == 1 || j['starId'] != null,
-    labels: decodeList(j['labels']).map((x) => '$x').toList(),
-    attachments: decodeList(j['attList'])
-        .whereType<Map>()
-        .map((x) => Map<String, dynamic>.from(x))
-        .toList(),
-  );
+  factory MailMessage.fromJson(Map<String, dynamic> j) {
+    final recipients = MailParticipant.read(j['recipient']);
+    final copiedRecipients = MailParticipant.read(j['cc']);
+    return MailMessage(
+      id: asInt(j['emailId']),
+      accountId: asInt(j['accountId']),
+      version: asInt(j['version']),
+      type: asInt(j['type']),
+      cc: copiedRecipients.map((person) => person.address).join(', '),
+      subject: asText(j['subject']),
+      sender: asText(j['sendEmail']),
+      name: asText(j['name']),
+      to: recipients.isNotEmpty
+          ? recipients.map((person) => person.address).join(', ')
+          : asText(j['toEmail']),
+      text: asText(j['text']),
+      content: asText(j['content']),
+      time: asText(j['createTime']),
+      folder: asText(j['folder']).isEmpty ? 'inbox' : asText(j['folder']),
+      category: asText(j['category']),
+      reason: asText(j['reason']),
+      unread: asInt(j['unread']) == 0,
+      starred: asInt(j['isStar']) == 1 || j['starId'] != null,
+      senderDomainAuthenticated: j['senderDomainAuthenticated'] == true,
+      recipients: recipients,
+      copiedRecipients: copiedRecipients,
+      labels: decodeList(j['labels']).map((x) => '$x').toList(),
+      attachments: decodeList(j['attList'])
+          .whereType<Map>()
+          .map((x) => Map<String, dynamic>.from(x))
+          .toList(),
+    );
+  }
   String get displayName => name.isNotEmpty ? name : sender;
+  List<MailParticipant> get toPeople =>
+      recipients.isEmpty ? MailParticipant.addresses(to) : recipients;
+  List<MailParticipant> get ccPeople => copiedRecipients.isEmpty
+      ? MailParticipant.addresses(cc)
+      : copiedRecipients;
+  String? get authenticatedDomain {
+    final at = sender.lastIndexOf('@');
+    if (!senderDomainAuthenticated || type != 0 || at < 1) return null;
+    final domain = sender.substring(at + 1).trim().toLowerCase();
+    return domain.isEmpty ? null : domain;
+  }
+
   String get body => text.trim().isNotEmpty ? text : plainText(content);
   String get preview => body.replaceAll(RegExp(r'\s+'), ' ').trim();
   String get code => extractOtp(subject, body);
@@ -171,6 +215,8 @@ class MailMessage {
     category: category,
     reason: reason,
     cc: cc,
+    recipients: recipients,
+    copiedRecipients: copiedRecipients,
     sender: sender,
     name: name,
     to: to,
@@ -180,6 +226,7 @@ class MailMessage {
     folder: folder ?? this.folder,
     unread: unread ?? this.unread,
     starred: starred ?? this.starred,
+    senderDomainAuthenticated: senderDomainAuthenticated,
     labels: labels ?? this.labels,
     attachments: attachments,
   );
@@ -190,7 +237,8 @@ class MailMessage {
     'type': type,
     'category': category,
     'reason': reason,
-    'cc': cc.split(', ').where((x) => x.isNotEmpty).toList(),
+    'cc': ccPeople.map((person) => person.toJson()).toList(),
+    'recipient': toPeople.map((person) => person.toJson()).toList(),
     'subject': subject,
     'sendEmail': sender,
     'name': name,
@@ -201,6 +249,7 @@ class MailMessage {
     'folder': folder,
     'unread': unread ? 0 : 1,
     'isStar': starred ? 1 : 0,
+    'senderDomainAuthenticated': senderDomainAuthenticated,
     'labels': labels,
     'attList': attachments,
   };

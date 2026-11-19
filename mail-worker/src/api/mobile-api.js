@@ -13,6 +13,7 @@ import {classify,reserveAiCall,replySuggestion,saveSenderRule} from '../service/
 import {MobileStore} from '../service/mobile/store';
 import {sendOnce} from '../service/mobile/send';
 import {extractVerificationCode} from '../service/mobile/domain';
+import {authenticatedSenderIds} from '../service/mobile/sender-authentication';
 
 const owner=c=>userContext.getUserId(c);
 const store=c=>new MobileStore(c.env.db,owner(c));
@@ -29,6 +30,7 @@ const requireCompleted = async c => {
 const camel=row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key.replace(/_([a-z])/g,(_,ch)=>ch.toUpperCase()),value]));
 async function detail(c,id){
  const mail=await store(c).detail(id);
+ const authenticated=await authenticatedSenderIds(c.env.db,owner(c),[Number(id)]);
  const state=await store(c).state(id);
  const star=await c.env.db.prepare('SELECT 1 AS starred FROM star WHERE user_id=? AND email_id=?')
   .bind(owner(c),Number(id)).first();
@@ -38,6 +40,7 @@ async function detail(c,id){
  return {
   ...camel(mail), folder:state.folder, version:state.version, labels:JSON.parse(state.labels),
   isStar:star ? 1 : 0,
+  senderDomainAuthenticated:authenticated.has(Number(id)),
   ...classify(mail,new Map(rule ? [[String(mail.send_email).trim().toLowerCase(),rule.category]] : [])),
   attList:await attService.list(c,{emailId:Number(id)},owner(c)),
   code:extractVerificationCode(mail.subject,mail.text||String(mail.content||'').replace(/<[^>]+>/g,' ')),
@@ -109,8 +112,9 @@ app.get('/mobile/mail',async c=>{
  const limit=Math.max(1,Math.min(50,Math.trunc(Number(q.size))||25));args.push(limit+1);
  const sql=`SELECT e.*,COALESCE(s.folder,'inbox') AS folder,COALESCE(s.version,0) AS version,COALESCE(s.labels,'[]') AS labels,st.star_id AS starId FROM email e JOIN account a ON a.account_id=e.account_id LEFT JOIN mobile_mail_state s ON s.user_id=e.user_id AND s.email_id=e.email_id LEFT JOIN star st ON st.email_id=e.email_id AND st.user_id=e.user_id WHERE ${where} ORDER BY e.email_id DESC LIMIT ?`;
  const rows=(await c.env.db.prepare(sql).bind(...args).all()).results;
+ const authenticated=await authenticatedSenderIds(c.env.db,owner(c),rows.slice(0,limit).map(row=>row.email_id));
  const rules=new Map(await completed(c) ? (await c.env.db.prepare('SELECT sender,category FROM mobile_sender_rule WHERE user_id=?').bind(owner(c)).all()).results.map(row=>[row.sender,row.category]) : []);
- const list=rows.slice(0,limit).map(row=>{const mail=camel(row);mail.isStar=mail.starId?1:0;mail.labels=JSON.parse(mail.labels);mail.code=extractVerificationCode(mail.subject,mail.text||'');return {...mail,...classify(row,rules)};});
+ const list=rows.slice(0,limit).map(row=>{const mail=camel(row);mail.isStar=mail.starId?1:0;mail.labels=JSON.parse(mail.labels);mail.code=extractVerificationCode(mail.subject,mail.text||'');return {...mail,...classify(row,rules),senderDomainAuthenticated:authenticated.has(row.email_id)};});
  return c.json(result.ok({list,hasMore:rows.length>limit}));
 });
 app.get('/mobile/mail/:id',async c=>{

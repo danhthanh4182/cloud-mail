@@ -32,7 +32,8 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 1. Mở thư bằng giao diện native, hiển thị người gửi/người nhận/CC/thời gian/nội dung; chỉ đánh dấu đọc khi mở thành công.
 2. Mã được trích có đối chiếu với thư gốc, nút copy một chạm và phản hồi hỗ trợ trình đọc màn hình. Không chọn bừa khi có nhiều ứng viên ngang nhau.
 3. Mã chỉ được gắn hạn sử dụng nếu thư ghi rõ; không suy đoán thời hạn hay tự đảm bảo link an toàn.
-4. HTML có bảng/liên kết được hiển thị phù hợp, script không chạy và ảnh theo dõi không tự tải. Link mở bằng trình duyệt ngoài sau thao tác của người dùng.
+4. HTML dùng bảng để dàn bố cục được đọc theo một cột, theo thứ tự nguồn và mỗi đoạn chỉ xuất hiện một lần. Bảng dữ liệu giữ hàng và cột, cuộn ngang độc lập khi rộng. Script không chạy và ảnh từ xa chỉ tải sau khi người dùng đồng ý. Link mở bằng trình duyệt ngoài sau thao tác của người dùng.
+5. Phần đầu thư hiển thị avatar chữ cái và địa chỉ người gửi, danh sách Đến/Cc có thể mở rộng và nhãn đã gán cho thư. Dấu xác thực tên miền chỉ xuất hiện khi máy chủ có kết quả DMARC pass từ cổng nhận đáng tin cậy.
 5. Tệp được tải/mở qua luồng có kiểm soát quyền sở hữu; có tiến độ, hủy, lỗi và giới hạn dung lượng rõ ràng.
 
 ### US04 · Soạn, trả lời, chuyển tiếp và nháp (P1)
@@ -73,7 +74,7 @@ Xây ứng dụng email Android sử dụng tài khoản Cloud Mail hiện có, 
 
 ## Remaining Android scope
 
-[Android completion and acceptance](completion-acceptance.md) defines AC19–AC27 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility and release evidence. These cases supplement US01–US08.
+[Android completion and acceptance](completion-acceptance.md) defines AC19–AC28 for conversation threading, native HTML, attachments, draft replication, offline edits, assistant, push, compatibility, release evidence and message identities. These cases supplement US01–US08.
 
 ## Functional Requirements
 
