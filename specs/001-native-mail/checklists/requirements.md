@@ -1,6 +1,6 @@
 # Requirements quality checklist
 
-- [x] Input/user constraints captured, including no WebView and Actions-only binaries.
+- [x] Input/user constraints captured, including a native Flutter shell and Actions-only binaries.
 - [x] Existing contracts distinguished from proposed endpoints.
 - [x] All journeys have observable acceptance cases and task mapping.
 - [x] Architecture trade-offs and consequential ADRs recorded.

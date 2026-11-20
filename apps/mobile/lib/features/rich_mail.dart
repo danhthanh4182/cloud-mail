@@ -5,6 +5,8 @@ import 'package:html/parser.dart' as html;
 import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
 
+import 'mail_html_document.dart';
+
 dom.Element? safeMailHtml(String source) {
   final document = html.parse(
     source.length > 160000 ? source.substring(0, 160000) : source,
@@ -24,16 +26,6 @@ dom.Element? safeMailHtml(String source) {
     }
   }
   return document.body;
-}
-
-Uri? safeMailUrl(String? value, {bool image = false}) {
-  final uri = Uri.tryParse(value?.trim() ?? '');
-  if (uri == null || uri.userInfo.isNotEmpty) return null;
-  if (!image && uri.scheme == 'mailto' && uri.path.contains('@')) return uri;
-  return uri.host.isNotEmpty &&
-          (uri.scheme == 'https' || (!image && uri.scheme == 'http'))
-      ? uri
-      : null;
 }
 
 class RichMailBody extends StatelessWidget {
@@ -277,31 +269,8 @@ class _RemoteMailImageState extends State<_RemoteMailImage> {
   late final image = _fetch();
 
   Future<Uint8List> _fetch() async {
-    const max = 2 * 1024 * 1024;
-    final response = await client
-        .send(http.Request('GET', widget.uri)..followRedirects = false)
-        .timeout(const Duration(seconds: 8));
-    if (response.statusCode != 200 ||
-        ![
-          'image/png',
-          'image/jpeg',
-          'image/webp',
-          'image/gif',
-        ].contains(response.headers['content-type']?.split(';').first.trim()) ||
-        (response.contentLength ?? 0) > max) {
-      client.close();
-      throw const FormatException('Unsupported image');
-    }
-    final bytes = BytesBuilder(copy: false);
-    await for (final part in response.stream.timeout(
-      const Duration(seconds: 8),
-    )) {
-      if (bytes.length + part.length > max) {
-        throw const FormatException('Image too large');
-      }
-      bytes.add(part);
-    }
-    return bytes.takeBytes();
+    final image = await fetchMailImage(client, widget.uri);
+    return image.bytes;
   }
 
   @override
@@ -326,4 +295,37 @@ class _RemoteMailImageState extends State<_RemoteMailImage> {
       return const LinearProgressIndicator();
     },
   );
+}
+
+Future<({String mime, Uint8List bytes})> fetchMailImage(
+  http.Client client,
+  Uri uri,
+) async {
+  const maxBytes = 2 * 1024 * 1024;
+  const timeout = Duration(seconds: 8);
+  final response = await client
+      .send(http.Request('GET', uri)..followRedirects = false)
+      .timeout(timeout);
+  final mime = response.headers['content-type']?.split(';').first.trim();
+  if (response.statusCode != 200 ||
+      mime == null ||
+      !const {
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif',
+      }.contains(mime) ||
+      (response.contentLength ?? 0) > maxBytes) {
+    final subscription = response.stream.listen(null);
+    await subscription.cancel();
+    throw const FormatException('Unsupported image');
+  }
+  final bytes = BytesBuilder(copy: false);
+  await for (final part in response.stream.timeout(timeout)) {
+    if (bytes.length + part.length > maxBytes) {
+      throw const FormatException('Image too large');
+    }
+    bytes.add(part);
+  }
+  return (mime: mime, bytes: bytes.takeBytes());
 }
