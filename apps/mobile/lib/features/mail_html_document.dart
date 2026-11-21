@@ -17,7 +17,7 @@ class MailHtmlDocument {
     );
     for (final node in document.querySelectorAll(
       'script, iframe, frame, frameset, object, embed, form, input, select, '
-      'textarea, button, svg, math, audio, video, source, track, canvas, '
+      'textarea, button, svg, math, audio, video, track, canvas, '
       'template, noscript, base, meta, link, plaintext, xmp',
     )) {
       node.remove();
@@ -37,11 +37,15 @@ class MailHtmlDocument {
       return null;
     }
 
+    final imageUrls = {
+      for (final image in document.querySelectorAll('img'))
+        image: mailImageUrl(image),
+    };
     final images = <dom.Element, Uri>{};
     final links = <Uri>{};
     for (final node in document.querySelectorAll('*')) {
       final href = node.attributes['href'];
-      final src = node.attributes['src'];
+      final imageUrl = imageUrls[node];
       node.attributes.removeWhere((key, _) {
         final name = key.toString().toLowerCase();
         return name.startsWith('on') ||
@@ -49,6 +53,9 @@ class MailHtmlDocument {
               'action',
               'background',
               'data',
+              'data-src',
+              'data-srcset',
+              'data-original',
               'download',
               'formaction',
               'href',
@@ -71,10 +78,11 @@ class MailHtmlDocument {
           links.add(url);
         }
       }
-      if (node.localName == 'img') {
-        final url = safeMailUrl(src, image: true);
-        if (url != null) images[node] = url;
-      }
+      if (imageUrl != null) images[node] = imageUrl;
+    }
+
+    for (final source in document.querySelectorAll('source')) {
+      source.remove();
     }
 
     final policy = dom.Element.tag('meta')
@@ -116,11 +124,57 @@ class MailHtmlDocument {
 }
 
 Uri? safeMailUrl(String? value, {bool image = false}) {
-  final uri = Uri.tryParse(value?.trim() ?? '');
-  if (uri == null || uri.userInfo.isNotEmpty) return null;
+  final input = value?.trim() ?? '';
+  final uri = Uri.tryParse(
+    image && input.startsWith('//') ? 'https:$input' : input,
+  );
+  if (uri == null || uri.authority.contains('@')) return null;
   if (!image && uri.scheme == 'mailto' && uri.path.contains('@')) return uri;
   return uri.host.isNotEmpty &&
           (uri.scheme == 'https' || (!image && uri.scheme == 'http'))
       ? uri
       : null;
+}
+
+final _hiddenMailImage = RegExp(
+  r'(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all)\s*(?:!important\s*)?(?:;|$)',
+  caseSensitive: false,
+);
+
+Uri? mailImageUrl(dom.Element image) {
+  for (dom.Element? node = image; node != null; node = node.parent) {
+    if (node.attributes.containsKey('hidden') ||
+        _hiddenMailImage.hasMatch(node.attributes['style'] ?? '')) {
+      return null;
+    }
+  }
+  final tinyDimension = RegExp(r'^(?:0|1)(?:px)?$', caseSensitive: false);
+  if (['height', 'width'].any(
+    (size) => tinyDimension.hasMatch(image.attributes[size]?.trim() ?? ''),
+  )) {
+    return null;
+  }
+  final attrs = image.attributes;
+  for (final src in [attrs['src'], attrs['data-src'], attrs['data-original']]) {
+    final url = safeMailUrl(src, image: true);
+    if (url != null) return url;
+  }
+  final picture = image.parent;
+  for (final list in [
+    attrs['srcset'],
+    attrs['data-srcset'],
+    if (picture?.localName == 'picture')
+      for (final source in picture!.children)
+        if (source.localName == 'source') source.attributes['srcset'],
+  ]) {
+    if (list == null || list.trimLeft().startsWith('data:')) continue;
+    for (final candidate in list.split(',')) {
+      final url = safeMailUrl(
+        candidate.trim().split(RegExp(r'\s+')).first,
+        image: true,
+      );
+      if (url != null) return url;
+    }
+  }
+  return null;
 }

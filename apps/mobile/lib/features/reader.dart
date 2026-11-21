@@ -542,10 +542,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.image_outlined),
                 label: Text(
-                  s.t(
-                    'Tải ảnh HTTPS trong thư này',
-                    'Load HTTPS images for this message',
-                  ),
+                  s.t('Hiển thị ảnh trong thư', 'Show images in this message'),
                 ),
                 onPressed: () async {
                   if (await confirm(
@@ -755,6 +752,10 @@ class _MessageBody extends StatelessWidget {
       document: html,
       showImages: showImages,
       onLink: (url) => _openLink(context, url),
+      unavailableImagesLabel: state.t(
+        'Một số ảnh trong thư không tải được.',
+        'Some images in this message could not be loaded.',
+      ),
       fallback: Builder(
         builder: (context) {
           final fallback = safeMailHtml(message.content);

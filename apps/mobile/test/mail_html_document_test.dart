@@ -99,6 +99,35 @@ void main() {
     expect(html.parse(mail.render()).querySelector('img[src]'), isNull);
   });
 
+  test('newsletter image sources wait for per-message consent', () {
+    final mail = MailHtmlDocument.parse('''
+      <img src="//cdn.example.test/banner.jpg" alt="Banner">
+      <img src="data:image/gif;base64,PLACEHOLDER"
+           data-src="https://cdn.example.test/instructions.png">
+      <picture><source media="(max-width: 480px)"
+         srcset="https://cdn.example.test/mobile.png 1x,
+                 https://cdn.example.test/mobile-large.png 2x">
+        <img src="https://cdn.example.test/desktop.png"></picture>
+      <img srcset="http://cdn.example.test/insecure.png 400w,
+                   https://cdn.example.test/safe.png 600w">
+      <picture><source srcset="//cdn.example.test/picture-only.png 1x"><img></picture>
+      <img src="//cdn.example.test/tracker.png" width="1" height="1">
+      <div style="display: none !important"><img src="//cdn.example.test/hidden.png"></div>
+    ''')!;
+    final imageUrls = mail.remoteImages.map((url) => url.toString());
+    expect(imageUrls, [
+      'https://cdn.example.test/banner.jpg',
+      'https://cdn.example.test/instructions.png',
+      'https://cdn.example.test/desktop.png',
+      'https://cdn.example.test/safe.png',
+      'https://cdn.example.test/picture-only.png',
+    ]);
+    expect(
+      html.parse(mail.render()).querySelector('[src], [srcset], [data-src]'),
+      isNull,
+    );
+  });
+
   test('empty and non-displayable mail use the text body', () {
     expect(MailHtmlDocument.parse(''), isNull);
     expect(MailHtmlDocument.parse('<style>p { color: red }</style>'), isNull);

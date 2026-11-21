@@ -4,6 +4,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
+import 'package:mime/mime.dart';
 
 import 'mail_html_document.dart';
 
@@ -139,7 +140,7 @@ class RichMailBody extends StatelessWidget {
     var visited = 0;
     Widget? remoteImage(dom.Element node) {
       if (!showImages || images >= 6) return null;
-      final uri = safeMailUrl(node.attributes['src'], image: true);
+      final uri = mailImageUrl(node);
       if (uri == null) return null;
       images++;
       return _RemoteMailImage(
@@ -303,29 +304,64 @@ Future<({String mime, Uint8List bytes})> fetchMailImage(
 ) async {
   const maxBytes = 2 * 1024 * 1024;
   const timeout = Duration(seconds: 8);
-  final response = await client
-      .send(http.Request('GET', uri)..followRedirects = false)
-      .timeout(timeout);
-  final mime = response.headers['content-type']?.split(';').first.trim();
-  if (response.statusCode != 200 ||
-      mime == null ||
-      !const {
-        'image/png',
-        'image/jpeg',
-        'image/webp',
-        'image/gif',
-      }.contains(mime) ||
-      (response.contentLength ?? 0) > maxBytes) {
-    final subscription = response.stream.listen(null);
-    await subscription.cancel();
-    throw const FormatException('Unsupported image');
-  }
-  final bytes = BytesBuilder(copy: false);
-  await for (final part in response.stream.timeout(timeout)) {
-    if (bytes.length + part.length > maxBytes) {
-      throw const FormatException('Image too large');
+  const supported = {
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+    'image/avif',
+  };
+  var url = safeMailUrl(uri.toString(), image: true);
+  var remainingRedirects = 3;
+  while (url != null) {
+    final response = await client
+        .send(http.Request('GET', url)..followRedirects = false)
+        .timeout(timeout);
+    final mime = response.headers['content-type']
+        ?.split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    final isRedirect = const {
+      301,
+      302,
+      303,
+      307,
+      308,
+    }.contains(response.statusCode);
+    final canRead =
+        response.statusCode == 200 &&
+        (response.contentLength ?? 0) <= maxBytes &&
+        (supported.contains(mime) ||
+            mime == null ||
+            mime == 'application/octet-stream');
+    if (!canRead) {
+      final subscription = response.stream.listen(null);
+      await subscription.cancel();
+      final location = response.headers['location'];
+      if (!isRedirect || location == null || remainingRedirects == 0) break;
+      final target = Uri.tryParse(location);
+      if (target == null) break;
+      url = safeMailUrl(url.resolveUri(target).toString(), image: true);
+      remainingRedirects--;
+      continue;
     }
-    bytes.add(part);
+
+    final buffer = BytesBuilder(copy: false);
+    await for (final part in response.stream.timeout(timeout)) {
+      if (buffer.length + part.length > maxBytes) {
+        throw const FormatException('Image too large');
+      }
+      buffer.add(part);
+    }
+    final bytes = buffer.takeBytes();
+    final resolvedMime = supported.contains(mime)
+        ? mime
+        : lookupMimeType('', headerBytes: bytes);
+    if (resolvedMime != null && supported.contains(resolvedMime)) {
+      return (mime: resolvedMime, bytes: bytes);
+    }
+    break;
   }
-  return (mime: mime, bytes: bytes.takeBytes());
+  throw const FormatException('Unsupported image or redirect');
 }

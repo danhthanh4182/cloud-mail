@@ -16,6 +16,7 @@ class MailBody extends StatefulWidget {
   final MailHtmlDocument document;
   final bool showImages;
   final Widget fallback;
+  final String unavailableImagesLabel;
   final ValueChanged<Uri> onLink;
 
   const MailBody({
@@ -23,6 +24,7 @@ class MailBody extends StatefulWidget {
     required this.document,
     required this.showImages,
     required this.fallback,
+    required this.unavailableImagesLabel,
     required this.onLink,
   });
 
@@ -39,6 +41,7 @@ class _MailBodyState extends State<MailBody>
   int? _lastZoom;
   var _images = <Uri, String>{};
   var _height = 64.0;
+  var _imagesUnavailable = false;
   var _available = !kIsWeb && Platform.isAndroid;
 
   @override
@@ -60,6 +63,7 @@ class _MailBodyState extends State<MailBody>
         oldWidget.showImages != widget.showImages) {
       _needsDocument = true;
       _images = {};
+      _imagesUnavailable = false;
       _loadImages();
       unawaited(_updateView());
     }
@@ -105,6 +109,8 @@ class _MailBodyState extends State<MailBody>
       _imageClient = null;
       setState(() {
         _images = loaded;
+        _imagesUnavailable =
+            loaded.length != widget.document.remoteImages.length;
         _needsDocument = true;
       });
       await _updateView();
@@ -178,6 +184,11 @@ class _MailBodyState extends State<MailBody>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_imageClient != null) const LinearProgressIndicator(),
+        if (_imagesUnavailable)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(widget.unavailableImagesLabel),
+          ),
         SizedBox(
           height: _height,
           child: PlatformViewLink(
