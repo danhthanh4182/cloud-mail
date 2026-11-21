@@ -61,7 +61,7 @@ function renderInline(node, out, ctx) {
 
 function inlineText(node, ctx) {
 	const out = [];
-	const sub = { limit: ctx.limit, used: ctx.used, done: false, truncated: false, atBreak: true, raw: true };
+	const sub = { limit: ctx.limit, used: ctx.used, done: false, truncated: false, atBreak: true, raw: true, omitImages: ctx.omitImages };
 	renderChildren(node, out, sub);
 	ctx.used = sub.used;
 	if (sub.done) {
@@ -84,6 +84,7 @@ function renderNode(node, out, ctx) {
 		if (tag === 'br') {
 			pushText(out, ' ', ctx);
 		} else if (tag === 'img') {
+			if (ctx.omitImages) return;
 			const alt = (node.getAttribute('alt') || '').trim() || 'image';
 			if (isSafeHref((node.getAttribute('src') || '').trim()) || node.getAttribute('alt')) pushText(out, `📷 ${alt}`, ctx);
 		} else {
@@ -207,7 +208,7 @@ function renderNode(node, out, ctx) {
 		case 'a': {
 			const href = (node.getAttribute('href') || '').trim();
 			const label = inlineText(node, ctx);
-			if (isSafeHref(href)) {
+			if (isSafeHref(href) && (label || !ctx.omitImages || !node.querySelector('img'))) {
 				out.push(`<a href="${escapeAttr(href)}">${label ? escapeHtml(label) : escapeHtml(href)}</a>`);
 				ctx.atBreak = false;
 			} else if (label) {
@@ -216,6 +217,7 @@ function renderNode(node, out, ctx) {
 			return;
 		}
 		case 'img': {
+			if (ctx.omitImages) return;
 			const src = (node.getAttribute('src') || '').trim();
 			const alt = (node.getAttribute('alt') || '').trim() || 'image';
 			if (isSafeHref(src)) {
@@ -309,7 +311,7 @@ function cleanup(tgHtml) {
 	return lines.replace(/\u0000PRE(\d+)\u0000/g, (_, id) => pres[Number(id)] || '');
 }
 
-export function htmlToTelegram(html, maxLength = TELEGRAM_TEXT_LIMIT) {
+export function htmlToTelegram(html, maxLength = TELEGRAM_TEXT_LIMIT, {omitImages = false} = {}) {
 	const limit = Math.max(0, Number(maxLength) || 0);
 	if (!html || !limit) return '';
 	try {
@@ -318,7 +320,7 @@ export function htmlToTelegram(html, maxLength = TELEGRAM_TEXT_LIMIT) {
 			: `<!DOCTYPE html><html><body>${html}</body></html>`;
 		const { document } = parseHTML(wrapped);
 		document.querySelectorAll('script, style, title, noscript').forEach(el => el.remove());
-		const ctx = { limit, used: 0, done: false, truncated: false, atBreak: true };
+		const ctx = { limit, used: 0, done: false, truncated: false, atBreak: true, omitImages };
 		const out = [];
 		renderChildren(document.body, out, ctx);
 		let result = cleanup(out.join(''));
