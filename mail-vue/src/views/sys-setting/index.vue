@@ -600,8 +600,10 @@
             </el-select>
           </div>
           <div class="tg-msg-label">
-            <span>{{t('emailText')}}</span>
-            <el-select  v-model="tgMsgText" >
+            <el-tooltip :content="$t('telegramShowImagesHint')">
+              <span>{{t('emailText')}}</span>
+            </el-tooltip>
+            <el-select v-model="tgMsgText">
               <el-option
                   v-for="item in tgMsgTextOption"
                   :key="item.value"
@@ -1073,7 +1075,11 @@ const tgMsgText = ref('')
 
 const tgMsgFromOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}, {label: t('onlyName'), value:'only-name'}]
 const tgMsgToOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
-const tgMsgTextOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
+const tgMsgTextOption = computed(() => [
+  {label: t('show'), value: 'show'},
+  {label: t('telegramShowImages'), value: 'show-images'},
+  {label: t('hide'), value: 'hide'},
+])
 const tgMsgLabelWidth = computed(() => locale.value === 'en' ? '120px' : '100px');
 
 getSettings()

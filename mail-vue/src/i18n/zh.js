@@ -222,6 +222,8 @@ const zh = {
     addTurnstileSecret: '添加 Turnstile 密钥',
     backgroundTitle: '设置背景',
     tgBotDesc: '可以将接收的邮件转发到Tg机器人',
+    telegramShowImages: '显示正文和外部图片',
+    telegramShowImagesHint: '转发时，Telegram 会从发件人提供的链接加载图片',
     tgBotToken: '机器人 token',
     toBotTokenDesc: '用户 chat_id 多个用,分开',
     otherEmailDesc: '可以将邮件转到其他服务商邮箱，需要在cloudflare验证邮箱',

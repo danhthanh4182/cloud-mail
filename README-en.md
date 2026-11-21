@@ -152,3 +152,7 @@ This project is licensed under the [MIT](LICENSE) license.
 ## Communication
 
 [Telegram](https://t.me/cloud_mail_tg)
+
+### Telegram email formatting
+
+In **System settings → Telegram bot → Email text**, **Show** preserves supported text formatting and data tables in Telegram Rich Messages. Select **Show with external images** to let Telegram load HTTPS banners and other images when forwarding. **View original email** opens the email in a browser or Telegram Mini App with its original layout, including CSS and layout tables. Configure the Cloud Mail HTTPS domain to enable this button.

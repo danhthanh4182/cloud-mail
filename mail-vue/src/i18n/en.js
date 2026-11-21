@@ -222,6 +222,8 @@ const en = {
     addTurnstileSecret: 'Add Turnstile secret',
     backgroundTitle: 'Change background',
     tgBotDesc: 'Forward received emails to a Telegram bot',
+    telegramShowImages: 'Show with external images',
+    telegramShowImagesHint: 'Telegram fetches images from sender-provided URLs when forwarding',
     tgBotToken: 'Bot token',
     toBotTokenDesc: 'Multiple user chat_ids, separated by commas',
     otherEmailDesc: 'Emails can be forwarded to an external address, but must be verified via Cloudflare.',

@@ -23,7 +23,7 @@ function truncateText(text, maxLength) {
 	return text.slice(0, maxLength - TRUNCATED_SUFFIX.length) + TRUNCATED_SUFFIX;
 }
 
-export default function emailMsgTemplate(email, tgMsgTo, tgMsgFrom, tgMsgText) {
+export default function emailMsgTemplate(email, tgMsgTo, tgMsgFrom, tgMsgText, options) {
 
 	let template = `<b>${escapeHtml(email.subject || '')}</b>`
 
@@ -51,12 +51,12 @@ To：\u200B${escapeHtml(email.toEmail || '')}`
 
 	const rawText = emailUtils.formatText((email.text || '').replace(/&nbsp;|&#160;|&#x0*a0;|\u00a0/gi, ' '));
 
-	if(tgMsgText === 'show') {
+	if(tgMsgText === 'show' || tgMsgText === 'show-images') {
 		const prefix = `${template}
 
 `;
 		const maxTextLength = Math.max(0, TELEGRAM_MESSAGE_LIMIT - prefix.length);
-		const body = htmlToTelegram(email.content, maxTextLength)
+		const body = htmlToTelegram(email.content, maxTextLength, options)
 			|| truncateText(escapeHtml(rawText), maxTextLength);
 		template += `
 
