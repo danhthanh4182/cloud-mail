@@ -1,9 +1,10 @@
 package dev.danhthanh.cloudmail.nativeapp
 
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
 import android.view.View
+import android.view.View.MeasureSpec
+import android.view.ViewGroup.LayoutParams
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -24,7 +25,20 @@ internal class MailHtmlViewFactory(private val messenger: BinaryMessenger) :
 }
 
 private class MailHtmlView(context: Context, private val channel: MethodChannel) : PlatformView {
-    private val container = FrameLayout(context)
+    private val container = object : FrameLayout(context) {
+        override fun measureChildWithMargins(
+            child: View,
+            parentWidthMeasureSpec: Int,
+            widthUsed: Int,
+            parentHeightMeasureSpec: Int,
+            heightUsed: Int,
+        ) {
+            // The Flutter slot has a fixed height. Measure the WebView independently
+            // so it can report its natural size when the email grows or shrinks.
+            val contentHeight = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            super.measureChildWithMargins(child, parentWidthMeasureSpec, widthUsed, contentHeight, 0)
+        }
+    }
     private var browser: WebView? = try {
         createBrowser(context)
     } catch (_: RuntimeException) {
@@ -32,7 +46,12 @@ private class MailHtmlView(context: Context, private val channel: MethodChannel)
     }
 
     init {
-        browser?.let { container.addView(it, FrameLayout.LayoutParams(-1, -1)) }
+        browser?.let {
+            container.addView(it, FrameLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.WRAP_CONTENT,
+            ))
+        }
         channel.setMethodCallHandler { call, result ->
             val view = browser
             when {
@@ -50,23 +69,16 @@ private class MailHtmlView(context: Context, private val channel: MethodChannel)
     }
 
     private fun createBrowser(context: Context): WebView {
-        val view = object : WebView(context) {
-            private var reportedHeight = 0
-
-            override fun onDraw(canvas: Canvas) {
-                super.onDraw(canvas)
-                // Content height is in CSS pixels. The viewport is fixed at one
-                // CSS pixel per logical pixel and text zoom changes the layout.
-                val current = contentHeight
-                if (current > 0 && current != reportedHeight) {
-                    reportedHeight = current
-                    post {
-                        if (browser === this && reportedHeight == current) {
-                            // A sender can declare arbitrary CSS heights. Keep pathological
-                            // sizes out of platform layout and use the Flutter fallback.
-                            if (current > 24000) channel.invokeMethod("unavailable", null)
-                            else channel.invokeMethod("height", current)
-                        }
+        val view = WebView(context)
+        view.addOnLayoutChangeListener { child, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            val height = bottom - top
+            if (height > 0 && height != oldBottom - oldTop) {
+                child.post {
+                    if (browser === child && child.height == height) {
+                        val logicalHeight = height / child.resources.displayMetrics.density.toDouble()
+                        // Fall back on heights that would make the platform view impractical.
+                        if (logicalHeight > 24000) channel.invokeMethod("unavailable", null)
+                        else channel.invokeMethod("height", logicalHeight)
                     }
                 }
             }

@@ -33,7 +33,10 @@ void main() {
           .map((el) => el.text)
           .join();
       expect(css, contains('@media (max-width: 480px)'));
-      expect(rendered.body!.attributes['style'], 'background-color: #fff');
+      expect(
+        rendered.body!.attributes['style'],
+        contains('background-color: #fff'),
+      );
       final action = rendered.querySelector('a.offer')!;
       expect(action.text, "This wasn't me");
       expect(action.attributes['style'], contains('border-radius: 12px'));
@@ -41,6 +44,34 @@ void main() {
       expect(rendered.documentElement!.attributes['lang'], 'vi');
     },
   );
+
+  test('fits the page height without changing the footer or table style', () {
+    final mail = MailHtmlDocument.parse('''
+      <html style="height: 100vh !important">
+      <body style="min-height: 100vh !important; background: #f0f1f2">
+        <table role="presentation" style="width: 100%; padding: 16px">
+          <tr><td>Account update</td></tr>
+          <tr><td>Example Social, Seattle, WA</td></tr>
+        </table>
+      </body></html>
+    ''')!;
+    final rendered = html.parse(mail.render());
+    for (final root in [rendered.documentElement!, rendered.body!]) {
+      expect(
+        root.attributes['style'],
+        endsWith('height: auto !important; min-height: 0 !important;'),
+      );
+    }
+    expect(rendered.body!.attributes['style'], contains('background: #f0f1f2'));
+    expect(
+      rendered.querySelector('table')!.attributes['style'],
+      'width: 100%; padding: 16px',
+    );
+    expect(
+      rendered.querySelectorAll('td').last.text,
+      'Example Social, Seattle, WA',
+    );
+  });
 
   test('strips active content and only applies approved img sources', () {
     final mail = MailHtmlDocument.parse('''

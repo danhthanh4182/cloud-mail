@@ -85,6 +85,16 @@ class MailHtmlDocument {
       source.remove();
     }
 
+    // Email templates can size an entire page to a browser viewport. The reader
+    // embeds the message by its content height, so only the roots should shrink.
+    const contentHeight = 'height: auto !important; min-height: 0 !important;';
+    for (final root in [document.documentElement!, body]) {
+      final style = root.attributes['style'];
+      root.attributes['style'] = style == null || style.trim().isEmpty
+          ? contentHeight
+          : '$style; $contentHeight';
+    }
+
     final policy = dom.Element.tag('meta')
       ..attributes.addAll({
         'http-equiv': 'Content-Security-Policy',
