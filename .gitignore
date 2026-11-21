@@ -27,3 +27,14 @@ mail-vue/dist
 .venv
 git-tools.js
 .dev.vars
+
+# Mobile binaries and private/generated state are never source
+*.apk
+*.aab
+*.apks
+*.idsig
+*.keystore
+*.jks
+**/build/
+**/.dart_tool/
+__pycache__/

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "forbidden_tracked_extensions": [".apk", ".aab", ".apks", ".idsig", ".jks", ".keystore"],
+  "forbidden_directory_segments": ["build", "node_modules", ".dart_tool"],
+  "deny_plaintext_credentials": true,
+  "require_explicit_approval": ["merge", "production_deploy", "production_migration", "external_mail_send", "destructive_account_action"],
+  "product_rules": ["native_client_no_webview_shell", "owner_checked_api", "no_automatic_send_or_delete", "no_secret_or_otp_logs", "no_blind_send_retry", "capability_gated_legacy_backend"],
+  "release_checks": ["analyze", "unit", "widget", "contract", "backend", "integration", "device", "signing", "artifact"],
+  "enforcement_note": "Extension/path/high-confidence token patterns, structure and evidence are automated. Ownership, privacy, design quality, behavior and user authorization also require review; this is not a sandbox or complete secret scanner."
+}

@@ -1,0 +1,26 @@
+name: Mobile specification and source guardrails
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  design-source-checks:
+    runs-on: ubuntu-latest
+    env:
+      SPECIFY_FEATURE_DIRECTORY: specs/001-native-mail
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tests/harness -v
+      - run: python3 scripts/harness.py verify
+      - run: bash .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
+      - run: python3 scripts/harness.py status
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix .harness
+      - run: npm exec --prefix .harness -- playwright install --with-deps chromium
+      - run: npm run test:design --prefix .harness
