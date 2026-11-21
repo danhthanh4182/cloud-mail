@@ -37,6 +37,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            MAIL_HTML_VIEW_TYPE,
+            MailHtmlViewFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
         pendingMail = readMail(intent)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "cloud_mail/push")
         channel?.setMethodCallHandler { call, result ->

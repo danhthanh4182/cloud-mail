@@ -5,9 +5,10 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:html/dom.dart' as dom;
 
 import '../data/api.dart';
+import 'android_mail_body.dart';
+import 'mail_html_document.dart';
 import 'rich_mail.dart';
 
 import '../app_controller.dart';
@@ -26,7 +27,7 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   late MailMessage m;
-  late final dom.Element? document;
+  late final MailHtmlDocument? document;
   late final Future<({List<MailMessage> list, bool truncated})>? thread;
   bool showImages = false;
   Completer<void>? transfer;
@@ -38,7 +39,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void initState() {
     super.initState();
     m = widget.mail;
-    document = m.content.isEmpty ? null : safeMailHtml(m.content);
+    document = MailHtmlDocument.parse(m.content);
     thread = s.capabilities.conversation && !s.offline
         ? s.conversation(m)
         : null;
@@ -325,20 +326,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final links =
-        (document?.querySelectorAll('a[href]') ?? const <dom.Element>[])
-            .map((element) => safeMailUrl(element.attributes['href']))
-            .whereType<Uri>()
-            .toSet()
-            .take(30);
-    final hasRemoteImages =
-        document
-            ?.querySelectorAll('img[src]')
-            .any(
-              (element) =>
-                  safeMailUrl(element.attributes['src'], image: true) != null,
-            ) ??
-        false;
+    final html = document;
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -550,26 +538,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 ),
               ),
             const SizedBox(height: 16),
-            if (document != null && document!.nodes.isNotEmpty)
-              RichMailBody(document: document!, showImages: showImages)
-            else
-              Text(
-                m.body.isEmpty
-                    ? s.t(
-                        '(Thư không có nội dung văn bản)',
-                        '(No text content)',
-                      )
-                    : m.body,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            if (hasRemoteImages && !showImages)
+            if (html != null && html.remoteImages.isNotEmpty && !showImages)
               OutlinedButton.icon(
                 icon: const Icon(Icons.image_outlined),
                 label: Text(
-                  s.t(
-                    'Tải ảnh HTTPS trong thư này',
-                    'Load HTTPS images for this message',
-                  ),
+                  s.t('Hiển thị ảnh trong thư', 'Show images in this message'),
                 ),
                 onPressed: () async {
                   if (await confirm(
@@ -586,31 +559,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   }
                 },
               ),
-            for (final url in links)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: Text(
-                    '$url',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onPressed: () async {
-                    if (await confirm(
-                      context,
-                      s,
-                      s.t('Mở liên kết ngoài?', 'Open external link?'),
-                      '$url',
-                    )) {
-                      await launchUrl(
-                        url,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    }
-                  },
-                ),
-              ),
+            _MessageBody(
+              state: s,
+              message: m,
+              document: html,
+              showImages: showImages,
+            ),
             if (downloading) ...[
               LinearProgressIndicator(value: transferProgress),
               TextButton(
@@ -676,7 +630,15 @@ class _ConversationItem extends StatefulWidget {
 }
 
 class _ConversationItemState extends State<_ConversationItem> {
-  Future<MailMessage>? mail;
+  Future<({MailMessage message, MailHtmlDocument? document})>? mail;
+
+  Future<({MailMessage message, MailHtmlDocument? document})> load() async {
+    final message = await widget.state.open(widget.message);
+    return (
+      message: message,
+      document: MailHtmlDocument.parse(message.content),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -697,33 +659,32 @@ class _ConversationItemState extends State<_ConversationItem> {
       title: Text(item.displayName),
       subtitle: Text('${item.subject} · ${item.time}'),
       onExpansionChanged: (open) {
-        if (open && mail == null) setState(() => mail = s.open(item));
+        if (open && mail == null) setState(() => mail = load());
       },
       children: [
         if (mail != null)
-          FutureBuilder<MailMessage>(
+          FutureBuilder<({MailMessage message, MailHtmlDocument? document})>(
             future: mail,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return TextButton(
-                  onPressed: () => setState(() => mail = s.open(item)),
+                  onPressed: () => setState(() => mail = load()),
                   child: Text(s.t('Tải lại thư', 'Retry loading message')),
                 );
               }
-              final loaded = snapshot.data;
-              if (loaded == null) return const LinearProgressIndicator();
-              final content = loaded.content.isEmpty
-                  ? null
-                  : safeMailHtml(loaded.content);
+              final data = snapshot.data;
+              if (data == null) return const LinearProgressIndicator();
+              final loaded = data.message;
               return Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (content != null && content.nodes.isNotEmpty)
-                      RichMailBody(document: content, showImages: false)
-                    else
-                      Text(loaded.body),
+                    _MessageBody(
+                      state: s,
+                      message: loaded,
+                      document: data.document,
+                    ),
                     if (loaded.code.isNotEmpty)
                       OtpCard(
                         state: s,
@@ -749,6 +710,79 @@ class _ConversationItemState extends State<_ConversationItem> {
             },
           ),
       ],
+    );
+  }
+}
+
+class _MessageBody extends StatelessWidget {
+  final AppController state;
+  final MailMessage message;
+  final MailHtmlDocument? document;
+  final bool showImages;
+
+  const _MessageBody({
+    required this.state,
+    required this.message,
+    required this.document,
+    this.showImages = false,
+  });
+
+  Future<void> _openLink(BuildContext context, Uri url) async {
+    if (await confirm(
+      context,
+      state,
+      state.t('Mở liên kết ngoài?', 'Open external link?'),
+      '$url',
+    )) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final html = document;
+    final text = Text(
+      message.body.isEmpty
+          ? state.t('(Thư không có nội dung văn bản)', '(No text content)')
+          : message.body,
+      style: Theme.of(context).textTheme.bodyLarge,
+    );
+    if (html == null) return text;
+    return MailBody(
+      document: html,
+      showImages: showImages,
+      onLink: (url) => _openLink(context, url),
+      unavailableImagesLabel: state.t(
+        'Một số ảnh trong thư không tải được.',
+        'Some images in this message could not be loaded.',
+      ),
+      fallback: Builder(
+        builder: (context) {
+          final fallback = safeMailHtml(message.content);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (fallback != null && fallback.nodes.isNotEmpty)
+                RichMailBody(document: fallback, showImages: showImages)
+              else
+                text,
+              for (final url in html.links.take(30))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: Text(
+                      '$url',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: () => _openLink(context, url),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

@@ -143,7 +143,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.runAsync(() => capture('reader-dark'));
+    await tester.runAsync(() => capture('reader-fallback-dark'));
     await tester.pumpWidget(const SizedBox());
     state.dispose();
   });

@@ -8,7 +8,7 @@
 **Stack:** Flutter stable/Dart with committed SDK pin and lockfile, Material 3, repository/state-management module, HTTPS client, platform-backed encrypted storage and Worker/D1. Exact dependency versions are selected and vulnerability/license checked at T002; no fictitious version pins in this plan.
 
 ## Global constraints
-Android API floor selected after resolving plugin minimums, target current supported SDK verified from official SDK at implementation. Proposed minimum Android 8/API26, target at least API35. No app WebView. No build output/signing keys in Git. No production data required for tests. VI/EN, light/dark, text scaling 200%, 48dp touch minimum. Preserve baseline code=200 envelope, raw Authorization and unread convention.
+Android API floor selected after resolving plugin minimums, target current supported SDK verified from official SDK at implementation. Proposed minimum Android 8/API26, target at least API35. The app shell is Flutter. Android uses an isolated HTML engine for message bodies. No build output/signing keys in Git. No production data required for tests. VI/EN, light/dark, text scaling 200%, 48dp touch minimum. Preserve baseline code=200 envelope, raw Authorization and unread convention.
 
 ## Modules
 - `apps/mobile/lib/app.dart` and `app_controller.dart`: routing, capability-aware navigation, session scope and localization.

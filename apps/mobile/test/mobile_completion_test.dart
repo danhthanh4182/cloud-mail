@@ -6,6 +6,7 @@ import 'package:cloud_mail/data/api.dart';
 import 'package:cloud_mail/domain/mail.dart';
 import 'package:cloud_mail/domain/mail_sync.dart';
 import 'package:cloud_mail/domain/smart_mail.dart';
+import 'package:cloud_mail/features/mail_html_document.dart';
 import 'package:cloud_mail/features/rich_mail.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

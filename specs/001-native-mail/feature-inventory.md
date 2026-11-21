@@ -6,7 +6,7 @@
 | Multiple email addresses | Existing list/add/name/delete | Picker, management and validation | Preserve quotas and domain rules |
 | Inbox/sent/starred/search | Existing | Typed client, cursor state, native UI | Owned detail endpoint for efficient reader |
 | Read status/star | Existing read-only transition/add/cancel | Mutations and reconciliation | Mark-unread endpoint |
-| Read HTML/text | Existing fields | Sanitized native layout-table flow, scrollable data tables and consent for remote resources | Attachment/detail authorization audit |
+| Read HTML/text | Existing fields | Isolated Android HTML body with author tables, embedded CSS, inline links and consent for HTTPS images | Attachment/detail authorization audit |
 | Message identity and labels | Sender, recipient and CC fields; mobile labels | Local initials, address details, label previews and DMARC domain badge for new mail with evidence | Direct gateway evidence captured by the Worker after migration 003; legacy mail still opens |
 | OTP | Existing AI extraction + Telegram copy | Rule extractor + copy component | Improved source-validated fallback shared with Telegram |
 | Send/reply/forward | Existing send endpoint | Composer, recipients, explicit send result | Durable send idempotency/status |
