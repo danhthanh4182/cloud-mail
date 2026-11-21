@@ -27,3 +27,12 @@ mail-vue/dist
 .venv
 git-tools.js
 .dev.vars
+
+# Android build artifacts and signing material: distribute using Actions artifacts only
+android-app/build/
+*.apk
+*.aab
+*.apks
+*.idsig
+*.keystore
+*.jks
